@@ -60,3 +60,11 @@ test("drag reorder saves row order with lightweight id scopes", () => {
   assert.match(appJs, /await saveRowOrder\(\)/);
   assert.match(appJs, /loadItems\(\{ preserveScroll: true \}\)\.catch/);
 });
+
+test("list navigation renders pending state before network responses", () => {
+  assert.match(appJs, /function showListPending/);
+  assert.match(appJs, /function loadItemsInBackground/);
+  assert.match(appJs, /if \(!options\.skipQueue\) queueVirtualPagesForRange\(start, end\)/);
+  assert.match(appJs, /showListPending\(getBackendListParams\(\)\);\s*loadItemsInBackground\(\);/);
+  assert.match(appJs, /Promise\.all\(\[loadGroups\(\), loadItems\(\)\]\)\.catch/);
+});

@@ -382,7 +382,8 @@ function setSort(key) {
     state.sortDir = ['video', 'subscriber', 'view', 'delta', 'updated', 'checked'].includes(key) ? 'desc' : 'asc';
   }
   renderSortHeaders();
-  loadItems().catch((err) => toast(err.message, 'error'));
+  showListPending(getBackendListParams(), { total: state.listTotal || CONFIG.LIST_PAGE_SIZE, preserveScroll: true });
+  loadItemsInBackground({ preserveScroll: true });
 }
 function renderSortHeaders() {
   document.querySelectorAll('[data-sort-key]').forEach((button) => {
@@ -905,8 +906,26 @@ function renderRows(options = {}) {
   }
   list.innerHTML = `<div class="virtual-spacer" style="height:${top}px"></div>${rows.join('')}<div class="virtual-spacer" style="height:${bottom}px"></div>`;
   if (savedScrollTop != null && scroller) scroller.scrollTop = savedScrollTop;
-  queueVirtualPagesForRange(start, end);
+  if (!options.skipQueue) queueVirtualPagesForRange(start, end);
   updateStats();
+}
+
+function estimatedListTotal(params = getBackendListParams()) {
+  if (params.search) return Math.min(state.listTotal || CONFIG.LIST_PAGE_SIZE, CONFIG.LIST_PAGE_SIZE);
+  if (params.group) return groupCount(params.group);
+  return state.itemSummary?.all_total ?? state.itemSummary?.total ?? state.listTotal ?? CONFIG.LIST_PAGE_SIZE;
+}
+
+function showListPending(params = getBackendListParams(), options = {}) {
+  const total = Math.max(0, Number(options.total ?? estimatedListTotal(params)) || 0);
+  resetVirtualList(total, params, { preserveLoaded: false });
+  renderGroups();
+  renderModalGroups();
+  renderRows({ preserveScroll: !!options.preserveScroll, skipQueue: true });
+}
+
+function loadItemsInBackground(options = {}) {
+  loadItems(options).catch((err) => toast(err.message, 'error'));
 }
 
 function updateStats() {
@@ -1422,8 +1441,8 @@ async function handleContextAction(action, groupValue = null) {
   }
   if (action === 'select-group') {
     setActiveGroup(state.contextGroup || ALL_GROUP_ID);
-    renderGroups();
-    renderRows();
+    showListPending(getBackendListParams());
+    loadItemsInBackground();
     return;
   }
   if (action === 'rename-group' && state.contextGroup && state.contextGroup !== ALL_GROUP_ID) return renameGroup(state.contextGroup);
@@ -1927,7 +1946,12 @@ function bindEvents() {
   qs('search-input').oninput = (e) => {
     state.search = e.target.value;
     clearTimeout(state.searchTimer);
-    state.searchTimer = setTimeout(() => loadItems().catch((err) => toast(err.message, 'error')), 220);
+    state.searchTimer = setTimeout(() => {
+      showListPending(getBackendListParams(), {
+        total: Math.min(state.listTotal || CONFIG.LIST_PAGE_SIZE, CONFIG.LIST_PAGE_SIZE),
+      });
+      loadItemsInBackground();
+    }, 220);
   };
   qs('group-search').oninput = (e) => { state.groupSearch = e.target.value; renderGroups(); };
   qs('manager-filter-wrap')?.addEventListener('click', async (e) => {
@@ -1945,9 +1969,13 @@ function bindEvents() {
     }
     if (option) {
       state.adminFilterUserId = option.dataset.ownerFilterOption || '';
+      setActiveGroup(ALL_GROUP_ID);
+      state.groups = [];
+      state.itemSummary = null;
+      invalidateItemCaches();
       renderOwnerSelectors();
-      await loadGroups();
-      await loadItems();
+      showListPending(getBackendListParams(), { total: CONFIG.LIST_PAGE_SIZE });
+      Promise.all([loadGroups(), loadItems()]).catch((err) => toast(err.message, 'error'));
     }
   });
   qs('manager-filter-wrap')?.addEventListener('input', (e) => {
@@ -1970,8 +1998,8 @@ function bindEvents() {
     if (del) return deleteGroup(del.dataset.deleteGroup).catch((err) => toast(err.message, 'error'));
     if (group) {
       setActiveGroup(group.dataset.group);
-      renderGroups();
-      await loadItems();
+      showListPending(getBackendListParams());
+      loadItemsInBackground();
     }
   });
 

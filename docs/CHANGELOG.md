@@ -1,6 +1,7 @@
 # Changelog
 
 ## 2026-06-11
+- Made group, owner-filter, search, sort, and context-menu navigation render an immediate pending list state before waiting for production API responses.
 - Prepared VPS deployment for `ytm.jazzrelaxation.com` with a dedicated YouTube Manager app/db compose stack that joins the shared Caddy proxy network without sharing SpotiCheck data.
 - Shortened the horizontal YouTube logo mark so its visible red player shape matches the native YouTube icon proportions more closely.
 - Rebuilt the horizontal YouTube mark as a higher-resolution SVG vector and enlarged the login/sidebar logo rendering for cleaner edges.
