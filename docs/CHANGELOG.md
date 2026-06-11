@@ -12,6 +12,7 @@
 - Added backend paging/search/sort plus `/items/summary`, switched the channel table to cached virtual rendering, and made refresh/export/delete-dead bulk actions fetch the full scope only on demand.
 
 ## 2026-06-10
+- Optimized slow channel-list operations: row drag/drop now updates optimistically and saves using lightweight item-id scopes, while Refresh all/group uses a backend scope refresh endpoint instead of downloading full row data first.
 - Switched hero banner URLs to a JPEG `w1707` YouTube image variant and reduced hero image filtering so channel covers render sharper without loading oversized images.
 - Fixed the local backend `.env` to use the YouTube SQLite database instead of the old Spotify PostgreSQL database, then backfilled `banner_image` for the existing tracked channels.
 - Added YouTube channel banner capture via `brandingSettings.image.bannerExternalUrl` and made the channel hero use the first visible channel banner with the existing default background as fallback.

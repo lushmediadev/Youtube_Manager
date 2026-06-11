@@ -21,6 +21,14 @@ class CrawlBatchRequest(BaseModel):
     item_ids: list[str | None] | None = None
 
 
+class CrawlScopeRequest(BaseModel):
+    """Refresh every item visible in a list scope without sending full rows to the browser."""
+
+    group: str | None = None
+    search: str | None = None
+    target_user_id: str | None = None
+
+
 class CrawlResponse(BaseModel):
     """Crawl job created response."""
 
@@ -37,5 +45,6 @@ class CrawlBatchResponse(BaseModel):
     job_ids: list[str]
     count: int
     accepted_indices: list[int] = []
+    item_ids: list[str] = []
     skipped_duplicates: int = 0
     message: str = "Batch crawl jobs created"

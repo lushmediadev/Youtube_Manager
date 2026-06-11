@@ -49,6 +49,11 @@ class ItemListResponse(BaseModel):
     total: int
 
 
+class ItemIdsResponse(BaseModel):
+    ids: list[str]
+    total: int
+
+
 class ItemGroupSummary(BaseModel):
     name: str
     count: int

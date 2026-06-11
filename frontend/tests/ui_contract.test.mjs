@@ -24,11 +24,17 @@ test("virtual list caches pages and renders viewport placeholders", () => {
   assert.match(styleCss, /\.virtual-row-placeholder/);
 });
 
-test("bulk operations fetch the complete scope before export or refresh", () => {
+test("bulk export/delete operations fetch the complete scope only when needed", () => {
   assert.match(appJs, /async function loadAllItemsForScope/);
   assert.match(appJs, /for \(let offset = CONFIG\.BULK_PAGE_SIZE; offset < total; offset \+= CONFIG\.BULK_PAGE_SIZE\)/);
-  assert.match(appJs, /refreshItems\(await loadAllItemsForScope\(\)\)/);
   assert.match(appJs, /exportTxt\(await loadAllItemsForScope\(\), groupLabel\(state\.activeGroup\)\)/);
+});
+
+test("large refresh actions run by scope without downloading full rows first", () => {
+  assert.match(appJs, /crawlScope:\s*\(params = \{\}\) => apiFetch\('\/crawl\/scope'/);
+  assert.match(appJs, /async function refreshScope/);
+  assert.match(appJs, /return refreshScope\(paramsForGroup\(contextGroup\), groupLabel\(contextGroup\)\)/);
+  assert.doesNotMatch(appJs, /refresh-current'\) return refreshItems\(await loadAllItemsForScope\(\)\)/);
 });
 
 test("excel export downloads a real xlsx blob", () => {
@@ -46,10 +52,11 @@ test("group counts come from backend summary instead of loaded row cache", () =>
   assert.doesNotMatch(appJs, /\$\{state\.items\.length\}/);
 });
 
-test("drag reorder saves row order after loading the active scope", () => {
+test("drag reorder saves row order with lightweight id scopes", () => {
   assert.match(appJs, /async function reorderRows/);
-  assert.match(appJs, /const currentScope = await loadAllItemsForScope\(\)/);
-  assert.match(appJs, /const allOwnerItems = await loadAllItemsForScope\(paramsForGroup\(ALL_GROUP_ID\)\)/);
+  assert.match(appJs, /async function loadAllItemIdsForScope/);
+  assert.match(appJs, /api\.itemIds\(params\)/);
+  assert.match(appJs, /applyOptimisticRowReorder\(dragKeys, targetKey, placement\)/);
   assert.match(appJs, /await saveRowOrder\(\)/);
-  assert.match(appJs, /await loadItems\(\{ preserveScroll: true \}\)/);
+  assert.match(appJs, /loadItems\(\{ preserveScroll: true \}\)\.catch/);
 });

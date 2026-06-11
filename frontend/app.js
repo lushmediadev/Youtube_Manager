@@ -29,6 +29,7 @@ const state = {
   listScopeKey: '',
   loadedPageOffsets: new Set(),
   loadingPagePromises: new Map(),
+  scopeIdCache: new Map(),
   dataLoadRequestId: 0,
   searchTimer: null,
   sortKey: 'stt',
@@ -142,10 +143,19 @@ const api = {
     const normalized = typeof params === 'string' ? { user_id: params } : params;
     return apiFetch('/items' + buildQuery(normalized));
   },
+  itemIds: (params = {}) => apiFetch('/items/ids' + buildQuery(params)),
   itemsSummary: (params = {}) => apiFetch('/items/summary' + buildQuery(params)),
   crawlBatch: (urls, group, targetUserId, itemIds = null) => apiFetch('/crawl/batch', {
     method: 'POST',
     body: JSON.stringify({ urls, group: group || null, target_user_id: targetUserId || null, item_ids: itemIds }),
+  }),
+  crawlScope: (params = {}) => apiFetch('/crawl/scope', {
+    method: 'POST',
+    body: JSON.stringify({
+      group: params.group || null,
+      search: params.search || null,
+      target_user_id: params.user_id || null,
+    }),
   }),
   moveItems: (itemIds, group, userId = null) => apiFetch('/items/move', {
     method: 'POST',
@@ -941,13 +951,8 @@ async function refreshItems(items) {
   const urls = items.map(itemUrl).filter(Boolean);
   const itemIds = items.map((item) => item.id);
   const response = await api.crawlBatch(urls, null, targetUserId() || null, itemIds);
-  response.job_ids.forEach((jobId, index) => {
-    state.pendingJobs.add(jobId);
-    if (itemIds[index]) state.pendingJobToItem.set(jobId, itemIds[index]);
-  });
+  trackRefreshJobs({ ...response, item_ids: response.item_ids?.length ? response.item_ids : itemIds });
   toast(`Đã bắt đầu refresh ${response.count} kênh`, 'success');
-  startPolling();
-  await loadItems();
 }
 
 async function pollJobs() {
@@ -1021,6 +1026,7 @@ async function submitAddChannels() {
   closeAddModal();
   toast(`Đã thêm ${response.count} kênh vào hàng check`, 'success');
   startPolling();
+  invalidateItemCaches();
   await loadItems();
 }
 
@@ -1068,6 +1074,7 @@ async function commitInlineGroupEdit() {
   if (edit.mode === 'create') {
     state.groups.push(next);
     await saveGroups();
+    invalidateItemCaches();
     state.inlineGroupEdit = null;
     setActiveGroup(next);
     renderGroups();
@@ -1084,6 +1091,7 @@ async function commitInlineGroupEdit() {
   state.groups = state.groups.filter((g) => g !== edit.originalName);
   state.groups.push(next);
   await saveGroups();
+  invalidateItemCaches();
   if (state.activeGroup === edit.originalName) setActiveGroup(next);
   state.inlineGroupEdit = null;
   await loadItems();
@@ -1093,6 +1101,7 @@ async function deleteGroup(name) {
   await api.renameGroup(name, '', targetUserId() || null);
   state.groups = state.groups.filter((g) => g !== name);
   await saveGroups();
+  invalidateItemCaches();
   if (state.activeGroup === name) state.activeGroup = ALL_GROUP_ID;
   await loadItems();
 }
@@ -1106,6 +1115,7 @@ async function moveSelectedToGroup() {
     state.groups.push(group.trim());
     await saveGroups();
   }
+  invalidateItemCaches();
   await loadItems();
 }
 async function deleteSelected() {
@@ -1114,6 +1124,7 @@ async function deleteSelected() {
   if (!confirm(`Xóa ${items.length} kênh đã chọn?`)) return;
   for (const item of items) await api.deleteItem(item.id);
   state.selected.clear();
+  invalidateItemCaches();
   await loadItems();
 }
 async function deleteDeadItems(items, label = 'list') {
@@ -1122,6 +1133,7 @@ async function deleteDeadItems(items, label = 'list') {
   if (!confirm(`Xóa ${dead.length} kênh chết trong ${label}?`)) return;
   for (const item of dead) await api.deleteItem(item.id);
   state.selected = new Set([...state.selected].filter((id) => !dead.some((item) => itemKey(item) === id)));
+  invalidateItemCaches();
   await loadItems();
   toast(`Đã xoá ${dead.length} kênh chết`, 'success');
 }
@@ -1131,6 +1143,7 @@ async function clearCurrentList() {
   if (!confirm(`Xóa ${label}?`)) return;
   await api.clearItems(group, targetUserId() || null);
   state.selected.clear();
+  invalidateItemCaches();
   await loadItems();
 }
 async function copySelectedLinks() {
@@ -1149,6 +1162,73 @@ async function loadAllItemsForScope(params = getBackendListParams()) {
     if (Array.isArray(page.items)) items.push(...page.items);
   }
   return items;
+}
+
+async function loadAllItemIdsForScope(params = getBackendListParams()) {
+  const scopeKey = getBackendListScopeKey(params);
+  if (state.scopeIdCache.has(scopeKey)) return state.scopeIdCache.get(scopeKey);
+  const data = await api.itemIds(params);
+  const ids = Array.isArray(data?.ids) ? data.ids.map(String) : [];
+  state.scopeIdCache.set(scopeKey, ids);
+  return ids;
+}
+
+function invalidateItemCaches() {
+  state.scopeIdCache.clear();
+}
+
+function moveKeys(keys, dragKeys, targetKey, placement) {
+  const draggedSet = new Set(dragKeys.map(String));
+  if (!targetKey || draggedSet.has(String(targetKey))) return keys;
+  const dragged = keys.filter((key) => draggedSet.has(String(key)));
+  if (!dragged.length) return keys;
+  const remaining = keys.filter((key) => !draggedSet.has(String(key)));
+  let insertAt = remaining.indexOf(String(targetKey));
+  if (insertAt < 0) return keys;
+  if (placement === 'after') insertAt += 1;
+  return [...remaining.slice(0, insertAt), ...dragged, ...remaining.slice(insertAt)];
+}
+
+function applyOptimisticRowReorder(dragKeys, targetKey, placement) {
+  const loaded = state.virtualItems
+    .map((item, index) => ({ item, index }))
+    .filter((entry) => entry.item);
+  const loadedKeys = loaded.map((entry) => itemKey(entry.item));
+  const nextKeys = moveKeys(loadedKeys, dragKeys, targetKey, placement);
+  if (nextKeys === loadedKeys) return;
+  const byKey = new Map(loaded.map((entry) => [itemKey(entry.item), entry.item]));
+  loaded.forEach((entry, index) => {
+    state.virtualItems[entry.index] = byKey.get(nextKeys[index]) || entry.item;
+  });
+  state.items = getLoadedVirtualItems();
+}
+
+function markItemsCrawling(itemIds = []) {
+  const ids = new Set(itemIds.map(String));
+  if (!ids.size) return;
+  state.virtualItems = state.virtualItems.map((item) => {
+    if (!item || !ids.has(item.id)) return item;
+    return { ...item, status: 'crawling', error_message: null };
+  });
+  state.items = getLoadedVirtualItems();
+  renderGroups();
+  renderRows({ preserveScroll: true });
+}
+
+function trackRefreshJobs(response) {
+  const itemIds = Array.isArray(response?.item_ids) ? response.item_ids : [];
+  (response?.job_ids || []).forEach((jobId, index) => {
+    state.pendingJobs.add(jobId);
+    if (itemIds[index]) state.pendingJobToItem.set(jobId, itemIds[index]);
+  });
+  markItemsCrawling(itemIds);
+  startPolling();
+}
+
+async function refreshScope(params = getBackendListParams(), label = 'channels') {
+  const response = await api.crawlScope(params);
+  trackRefreshJobs(response);
+  toast(`Đã bắt đầu refresh ${response.count} ${label}`, 'success');
 }
 
 function paramsForGroup(groupId) {
@@ -1302,9 +1382,9 @@ async function handleContextAction(action, groupValue = null) {
     return;
   }
   if (action === 'add-group') return createGroup();
-  if (action === 'refresh-current') return refreshItems(await loadAllItemsForScope());
-  if (action === 'refresh-group') return refreshItems(await loadAllItemsForScope(paramsForGroup(contextGroup)));
-  if (action === 'refresh-all') return refreshItems(await loadAllItemsForScope(paramsForGroup(ALL_GROUP_ID)));
+  if (action === 'refresh-current') return refreshScope(getBackendListParams(), groupLabel(state.activeGroup));
+  if (action === 'refresh-group') return refreshScope(paramsForGroup(contextGroup), groupLabel(contextGroup));
+  if (action === 'refresh-all') return refreshScope(paramsForGroup(ALL_GROUP_ID), 'kênh');
   if (action === 'copy-current') {
     const items = await loadAllItemsForScope();
     await navigator.clipboard.writeText(items.map(itemUrl).join('\n'));
@@ -1323,7 +1403,7 @@ async function handleContextAction(action, groupValue = null) {
   if (action === 'delete-dead-group') return deleteDeadItems(await loadAllItemsForScope(paramsForGroup(contextGroup)), groupLabel(contextGroup));
   if (action === 'delete-dead-all') return deleteDeadItems(await loadAllItemsForScope(paramsForGroup(ALL_GROUP_ID)), 'all channels');
   if (action === 'clear-current') return clearCurrentList();
-  if (action === 'refresh') return refreshItems(contextItems.length ? contextItems : await loadAllItemsForScope());
+  if (action === 'refresh') return contextItems.length ? refreshItems(contextItems) : refreshScope(getBackendListParams(), groupLabel(state.activeGroup));
   if (action === 'open') {
     const first = contextItems[0];
     if (first) window.open(itemUrl(first), '_blank');
@@ -1439,25 +1519,23 @@ function clearDragState() {
 }
 
 async function reorderRows(dragKeys, targetKey, placement) {
-  const currentScope = await loadAllItemsForScope();
-  const allOwnerItems = await loadAllItemsForScope(paramsForGroup(ALL_GROUP_ID));
-  const visibleKeys = currentScope.map(itemKey);
   const draggedSet = new Set(dragKeys);
   if (!targetKey || draggedSet.has(targetKey)) return;
-  const draggedVisible = visibleKeys.filter((key) => draggedSet.has(key));
-  const remainingVisible = visibleKeys.filter((key) => !draggedSet.has(key));
-  let insertAt = remainingVisible.indexOf(targetKey);
-  if (insertAt < 0) return;
-  if (placement === 'after') insertAt += 1;
-  const nextVisible = [...remainingVisible];
-  nextVisible.splice(insertAt, 0, ...draggedVisible);
+  applyOptimisticRowReorder(dragKeys, targetKey, placement);
+  renderRows({ preserveScroll: true });
+
+  const currentScopeIds = await loadAllItemIdsForScope();
+  const allOwnerIds = state.activeGroup === ALL_GROUP_ID && !state.search.trim()
+    ? currentScopeIds
+    : await loadAllItemIdsForScope(paramsForGroup(ALL_GROUP_ID));
+  const nextVisible = moveKeys(currentScopeIds, dragKeys, targetKey, placement);
   const visibleSet = new Set(nextVisible);
-  const hidden = allOwnerItems.map(itemKey).filter((key) => !visibleSet.has(key));
+  const hidden = allOwnerIds.filter((key) => !visibleSet.has(key));
   state.rowOrder = [...nextVisible, ...hidden];
   state.sortKey = 'stt';
   state.sortDir = 'asc';
   await saveRowOrder();
-  await loadItems({ preserveScroll: true });
+  loadItems({ preserveScroll: true }).catch((err) => toast(err.message, 'error'));
 }
 
 async function reorderGroups(dragged, target, placement) {
@@ -1482,6 +1560,7 @@ async function moveRowsToGroupByKeys(keys, group) {
     state.groups.push(nextGroup);
     await saveGroups();
   }
+  invalidateItemCaches();
   toast(`Đã chuyển ${items.length} kênh`, 'success');
   await loadItems();
 }
@@ -1492,6 +1571,7 @@ async function clearGroup(groupId) {
   if (!confirm(`Xóa ${label}?`)) return;
   await api.clearItems(group, targetUserId() || null);
   state.selected.clear();
+  invalidateItemCaches();
   await loadItems();
 }
 
@@ -1729,7 +1809,11 @@ function bindEvents() {
   qs('btn-add-link').onclick = openAddModal;
   qs('btn-refresh').onclick = () => (async () => {
     const selected = selectedItems();
-    await refreshItems(selected.length ? selected : await loadAllItemsForScope());
+    if (selected.length) {
+      await refreshItems(selected);
+    } else {
+      await refreshScope(getBackendListParams(), groupLabel(state.activeGroup));
+    }
   })().catch((err) => toast(err.message, 'error'));
   qs('btn-new-group').onclick = createGroup;
   qs('modal-submit').onclick = () => submitAddChannels().catch((err) => toast(err.message, 'error'));
@@ -2044,8 +2128,12 @@ function bindEvents() {
     const row = e.target.closest('[data-row-id]');
     if (!row || !state.draggingRowKeys.length) return;
     e.preventDefault();
+    const dragKeys = [...state.draggingRowKeys];
+    const targetKey = row.dataset.rowId;
+    const placement = state.dragOverRowPlacement;
+    clearDragState();
     try {
-      await reorderRows(state.draggingRowKeys, row.dataset.rowId, state.dragOverRowPlacement);
+      await reorderRows(dragKeys, targetKey, placement);
     } catch (err) {
       toast(err.message, 'error');
     } finally {
@@ -2093,9 +2181,13 @@ function bindEvents() {
   qs('links-view').addEventListener('drop', async (e) => {
     if (!state.draggingRowKeys.length || e.target.closest('[data-row-id]')) return;
     e.preventDefault();
+    const dragKeys = [...state.draggingRowKeys];
     try {
       updateBlankRowDrop(e);
-      await reorderRows(state.draggingRowKeys, state.dragOverRowKey, state.dragOverRowPlacement);
+      const targetKey = state.dragOverRowKey;
+      const placement = state.dragOverRowPlacement;
+      clearDragState();
+      await reorderRows(dragKeys, targetKey, placement);
     } catch (err) {
       toast(err.message, 'error');
     } finally {
@@ -2177,5 +2269,5 @@ init().catch((err) => {
   toast(err.message || 'Startup error', 'error');
 });
 
-window.refreshAllItems = () => loadAllItemsForScope().then(refreshItems);
+window.refreshAllItems = () => refreshScope(paramsForGroup(ALL_GROUP_ID), 'kênh');
 

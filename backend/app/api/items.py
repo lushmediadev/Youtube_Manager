@@ -15,7 +15,7 @@ from app.database import get_db
 from app.models.crawl_job import CrawlJob
 from app.models.item import Item
 from app.models.user import User
-from app.schemas.item import ItemGroupSummary, ItemListResponse, ItemMoveRequest, ItemResponse, ItemSummaryResponse
+from app.schemas.item import ItemGroupSummary, ItemIdsResponse, ItemListResponse, ItemMoveRequest, ItemResponse, ItemSummaryResponse
 from app.services.auth import get_current_user
 from app.utils.youtube_urls import build_channel_url
 
@@ -185,6 +185,28 @@ async def list_items(
     total = (await db.execute(count_query)).scalar() or 0
     users = await _user_map(db, list({item.user_id for item in items}))
     return ItemListResponse(items=[_response(item, users.get(item.user_id)) for item in items], total=total)
+
+
+@router.get("/items/ids", response_model=ItemIdsResponse)
+async def list_item_ids(
+    group: str | None = Query(None),
+    user_id: str | None = Query(None),
+    search: str | None = Query(None),
+    sort: str | None = Query(None),
+    sort_direction: str | None = Query("asc"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    group = _plain_query_value(group)
+    search = _plain_query_value(search)
+    sort = _plain_query_value(sort)
+    sort_direction = _plain_query_value(sort_direction, "asc")
+    visible_ids = await _visible_user_ids(db, current_user, user_id)
+    query = _with_item_filters(select(Item.id), visible_ids, group, search)
+    count_query = _with_item_filters(select(func.count()).select_from(Item), visible_ids, group, search)
+    result = await db.execute(_apply_item_sort(query, current_user, sort, sort_direction))
+    total = (await db.execute(count_query)).scalar() or 0
+    return ItemIdsResponse(ids=[str(row[0]) for row in result.all()], total=total)
 
 
 @router.get("/items/summary", response_model=ItemSummaryResponse)
