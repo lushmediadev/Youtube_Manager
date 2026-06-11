@@ -9,6 +9,8 @@
 
 const ALL_GROUP_ID = 'all';
 const ALL_GROUP_LABEL = 'All Channels';
+const LIST_CACHE_VERSION = 1;
+const LIST_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 
 const state = {
   user: null,
@@ -24,6 +26,9 @@ const state = {
   userManagerFilterIds: [],
   itemSummary: null,
   listTotal: 0,
+  listPending: false,
+  pendingPlaceholderRows: 0,
+  pendingTotalLabel: null,
   virtualItems: [],
   currentListParams: {},
   listScopeKey: '',
@@ -58,6 +63,24 @@ function setStoredUser(user) { localStorage.setItem('ytmanager_user', JSON.strin
 function storedUser() {
   try { return JSON.parse(localStorage.getItem('ytmanager_user') || 'null'); } catch { return null; }
 }
+function currentUserCacheId() {
+  return String(state.user?.id || state.user?.username || 'anonymous');
+}
+function listCacheKey(params = getBackendListParams()) {
+  const scope = getBackendListScopeKey(params);
+  return `ytmanager_list_cache_v${LIST_CACHE_VERSION}:${currentUserCacheId()}:${scope}`;
+}
+function readJsonStorage(key) {
+  try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch { return null; }
+}
+function writeJsonStorage(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch (err) { console.warn('cache write failed', err); }
+}
+function clearListCache() {
+  Object.keys(localStorage)
+    .filter((key) => key.startsWith(`ytmanager_list_cache_v${LIST_CACHE_VERSION}:`))
+    .forEach((key) => localStorage.removeItem(key));
+}
 function roleLabel(role) {
   return role === 'admin' ? 'Admin' : role === 'manager' ? 'Manager' : 'User';
 }
@@ -78,6 +101,7 @@ function setSidebarActive(view) {
 function logout() {
   localStorage.removeItem('ytmanager_token');
   localStorage.removeItem('ytmanager_user');
+  clearListCache();
   window.location.href = '/login.html';
 }
 function requireAuth() {
@@ -382,7 +406,11 @@ function setSort(key) {
     state.sortDir = ['video', 'subscriber', 'view', 'delta', 'updated', 'checked'].includes(key) ? 'desc' : 'asc';
   }
   renderSortHeaders();
-  showListPending(getBackendListParams(), { total: state.listTotal || CONFIG.LIST_PAGE_SIZE, preserveScroll: true });
+  showListPending(getBackendListParams(), {
+    total: state.listTotal || 0,
+    totalLabel: state.listTotal ? state.listTotal : '...',
+    preserveScroll: true,
+  });
   loadItemsInBackground({ preserveScroll: true });
 }
 function renderSortHeaders() {
@@ -580,6 +608,7 @@ async function loadGroups() {
   state.groups = Array.isArray(data.groups) ? data.groups : [];
   renderGroups();
   renderModalGroups();
+  saveListCache();
 }
 
 async function saveGroups() {
@@ -600,7 +629,10 @@ function allGroupsFromItems() {
 }
 
 function groupCount(groupName) {
-  if (groupName === ALL_GROUP_ID) return state.itemSummary?.all_total ?? state.listTotal ?? getLoadedVirtualItems().length;
+  if (groupName === ALL_GROUP_ID) {
+    if (state.listPending && state.pendingTotalLabel != null) return state.pendingTotalLabel;
+    return state.itemSummary?.all_total ?? state.listTotal ?? getLoadedVirtualItems().length;
+  }
   return (state.itemSummary?.groups || []).find((group) => group.name === groupName)?.count || 0;
 }
 
@@ -774,6 +806,40 @@ function commitPageItems(items, offset, total) {
   normalizeRowOrder();
 }
 
+function buildListCacheSnapshot(params = getBackendListParams()) {
+  return {
+    cached_at: Date.now(),
+    params,
+    groups: Array.isArray(state.groups) ? state.groups : [],
+    itemSummary: state.itemSummary || null,
+    total: state.listTotal || 0,
+    items: state.virtualItems.slice(0, CONFIG.LIST_PAGE_SIZE).filter(Boolean),
+  };
+}
+
+function saveListCache(params = getBackendListParams()) {
+  const snapshot = buildListCacheSnapshot(params);
+  if (!snapshot.total && !snapshot.items.length && !snapshot.groups.length) return;
+  writeJsonStorage(listCacheKey(params), snapshot);
+}
+
+function hydrateListCache(params = getBackendListParams()) {
+  const cached = readJsonStorage(listCacheKey(params));
+  if (!cached || Date.now() - Number(cached.cached_at || 0) > LIST_CACHE_TTL_MS) return false;
+  const items = Array.isArray(cached.items) ? cached.items : [];
+  const total = Math.max(Number(cached.total) || items.length || 0, items.length);
+  state.groups = Array.isArray(cached.groups) ? cached.groups : [];
+  state.itemSummary = cached.itemSummary && typeof cached.itemSummary === 'object' ? cached.itemSummary : null;
+  clearListPending();
+  resetVirtualList(total, params, { preserveLoaded: false });
+  commitPageItems(items, 0, total);
+  renderOwnerSelectors();
+  renderGroups();
+  renderModalGroups();
+  renderRows({ skipQueue: true });
+  return true;
+}
+
 function pageOffsetForIndex(index) {
   return Math.max(0, Math.floor(index / CONFIG.LIST_PAGE_SIZE) * CONFIG.LIST_PAGE_SIZE);
 }
@@ -889,6 +955,14 @@ function renderRows(options = {}) {
   renderSortHeaders();
   const list = qs('link-list');
   const empty = qs('empty-state');
+  if (state.listPending && !state.listTotal) {
+    empty.classList.add('hidden');
+    const placeholderRows = Math.max(6, Number(state.pendingPlaceholderRows) || CONFIG.VIRTUAL_OVERSCAN_ROWS);
+    list.innerHTML = Array.from({ length: placeholderRows }, (_, idx) => renderVirtualPlaceholder(idx)).join('');
+    if (savedScrollTop != null && scroller) scroller.scrollTop = savedScrollTop;
+    updateStats();
+    return;
+  }
   if (!state.listTotal) {
     list.innerHTML = '';
     empty.classList.remove('hidden');
@@ -911,24 +985,47 @@ function renderRows(options = {}) {
 }
 
 function estimatedListTotal(params = getBackendListParams()) {
-  if (params.search) return Math.min(state.listTotal || CONFIG.LIST_PAGE_SIZE, CONFIG.LIST_PAGE_SIZE);
-  if (params.group) return groupCount(params.group);
-  return state.itemSummary?.all_total ?? state.itemSummary?.total ?? state.listTotal ?? CONFIG.LIST_PAGE_SIZE;
+  if (params.search) return state.listTotal ? Math.min(state.listTotal, CONFIG.LIST_PAGE_SIZE) : 0;
+  if (params.group) return Number(groupCount(params.group)) || 0;
+  return state.itemSummary?.all_total ?? state.itemSummary?.total ?? state.listTotal ?? 0;
 }
 
 function showListPending(params = getBackendListParams(), options = {}) {
+  const hasExplicitTotal = Object.prototype.hasOwnProperty.call(options, 'total');
   const total = Math.max(0, Number(options.total ?? estimatedListTotal(params)) || 0);
+  state.listPending = true;
+  state.pendingPlaceholderRows = Number(options.placeholderRows) || Math.min(Math.max(total || 10, 6), 14);
+  state.pendingTotalLabel = options.totalLabel ?? (hasExplicitTotal && !total ? '...' : total);
   resetVirtualList(total, params, { preserveLoaded: false });
   renderGroups();
   renderModalGroups();
   renderRows({ preserveScroll: !!options.preserveScroll, skipQueue: true });
 }
 
+function clearListPending() {
+  state.listPending = false;
+  state.pendingPlaceholderRows = 0;
+  state.pendingTotalLabel = null;
+}
+
 function loadItemsInBackground(options = {}) {
-  loadItems(options).catch((err) => toast(err.message, 'error'));
+  loadItems(options).catch((err) => {
+    clearListPending();
+    renderRows({ preserveScroll: !!options.preserveScroll, skipQueue: true });
+    toast(err.message, 'error');
+  });
 }
 
 function updateStats() {
+  if (state.listPending) {
+    const total = state.pendingTotalLabel ?? '...';
+    [
+      ['kpi-total', total], ['kpi-active', '...'], ['kpi-errors', '...'], ['kpi-crawling', '...'], ['kpi-selected', state.selected.size],
+      ['footer-total', total], ['footer-active', '...'], ['footer-errors', '...'], ['footer-crawling', '...'], ['footer-selected', state.selected.size],
+    ].forEach(([id, value]) => { const el = qs(id); if (el) el.textContent = value; });
+    qs('btn-clear-list').classList.toggle('hidden', true);
+    return;
+  }
   const summary = state.itemSummary || {};
   const loaded = getLoadedVirtualItems();
   const total = summary.total ?? state.listTotal ?? loaded.length;
@@ -952,6 +1049,7 @@ async function loadItems(options = {}) {
     api.items({ ...params, limit: CONFIG.LIST_PAGE_SIZE, offset: 0 }),
   ]);
   if (requestId !== state.dataLoadRequestId) return;
+  clearListPending();
   state.itemSummary = summary || null;
   const total = Number(summary?.total ?? data?.total ?? (data?.items || []).length) || 0;
   if (!preserveLoaded) {
@@ -963,6 +1061,7 @@ async function loadItems(options = {}) {
   renderGroups();
   renderModalGroups();
   renderRows({ preserveScroll: options.preserveScroll });
+  saveListCache(params);
 }
 
 async function refreshItems(items) {
@@ -1947,8 +2046,10 @@ function bindEvents() {
     state.search = e.target.value;
     clearTimeout(state.searchTimer);
     state.searchTimer = setTimeout(() => {
+      const searchTotal = state.listTotal ? Math.min(state.listTotal, CONFIG.LIST_PAGE_SIZE) : 0;
       showListPending(getBackendListParams(), {
-        total: Math.min(state.listTotal || CONFIG.LIST_PAGE_SIZE, CONFIG.LIST_PAGE_SIZE),
+        total: searchTotal,
+        totalLabel: searchTotal || '...',
       });
       loadItemsInBackground();
     }, 220);
@@ -1974,7 +2075,9 @@ function bindEvents() {
       state.itemSummary = null;
       invalidateItemCaches();
       renderOwnerSelectors();
-      showListPending(getBackendListParams(), { total: CONFIG.LIST_PAGE_SIZE });
+      if (!hydrateListCache(getBackendListParams())) {
+        showListPending(getBackendListParams(), { total: 0, totalLabel: '...', placeholderRows: 10 });
+      }
       Promise.all([loadGroups(), loadItems()]).catch((err) => toast(err.message, 'error'));
     }
   });
@@ -2279,14 +2382,16 @@ async function init() {
   if (!requireAuth()) return;
   bindEvents();
   setupUserShell();
-  try {
-    await api.health();
-    qs('api-status').textContent = 'Online';
-  } catch {
-    qs('api-status').textContent = 'Offline';
+  renderOwnerSelectors();
+  if (!hydrateListCache(getBackendListParams())) {
+    showListPending(getBackendListParams(), { total: 0, totalLabel: '...', placeholderRows: 10 });
   }
+  api.health()
+    .then(() => { qs('api-status').textContent = 'Online'; })
+    .catch(() => { qs('api-status').textContent = 'Offline'; });
   await refreshCurrentUser();
   await loadUsers();
+  renderOwnerSelectors();
   await loadPreferences();
   await loadGroups();
   await loadItems();

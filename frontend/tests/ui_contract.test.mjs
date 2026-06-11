@@ -68,3 +68,16 @@ test("list navigation renders pending state before network responses", () => {
   assert.match(appJs, /showListPending\(getBackendListParams\(\)\);\s*loadItemsInBackground\(\);/);
   assert.match(appJs, /Promise\.all\(\[loadGroups\(\), loadItems\(\)\]\)\.catch/);
 });
+
+test("pending navigation does not show page size as real channel total", () => {
+  assert.match(appJs, /pendingTotalLabel/);
+  assert.match(appJs, /showListPending\(getBackendListParams\(\), \{ total: 0, totalLabel: '\.\.\.', placeholderRows: 10 \}\)/);
+  assert.doesNotMatch(appJs, /showListPending\(getBackendListParams\(\), \{ total: CONFIG\.LIST_PAGE_SIZE \}\)/);
+});
+
+test("startup hydrates cached list before waiting for API data", () => {
+  assert.match(appJs, /function hydrateListCache/);
+  assert.match(appJs, /function saveListCache/);
+  assert.match(appJs, /if \(!hydrateListCache\(getBackendListParams\(\)\)\) \{\s*showListPending/);
+  assert.match(appJs, /saveListCache\(params\)/);
+});

@@ -1,6 +1,8 @@
 # Changelog
 
 ## 2026-06-11
+- Added a warm-start list cache so returning users see cached groups/first-page channels immediately while production API data refreshes in the background.
+- Fixed pending list state so the internal page size `160` is not shown as the real `All Channels` count while switching owner filters.
 - Made group, owner-filter, search, sort, and context-menu navigation render an immediate pending list state before waiting for production API responses.
 - Prepared VPS deployment for `ytm.jazzrelaxation.com` with a dedicated YouTube Manager app/db compose stack that joins the shared Caddy proxy network without sharing SpotiCheck data.
 - Shortened the horizontal YouTube logo mark so its visible red player shape matches the native YouTube icon proportions more closely.
