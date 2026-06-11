@@ -1,0 +1,19 @@
+﻿<Window x:Class="YoutubeManager.UI.AddChannelWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:YoutubeManager.UI"
+        mc:Ignorable="d"
+        Title="AddChannelWindow" Height="310.487" Width="759.343" WindowStartupLocation="CenterOwner">
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="1*"/>
+            <ColumnDefinition Width="1*"/>
+        </Grid.ColumnDefinitions>
+        <TextBox x:Name="tb_channels" Text="{Binding ChannelLinks}" Margin="10,10,10,41" TextWrapping="Wrap" AcceptsReturn="True" Grid.ColumnSpan="2"/>
+        <Button x:Name="btn_add" Click="btn_add_Click" Content="Add" HorizontalAlignment="Right" Margin="0,243,100,0" VerticalAlignment="Top" Width="75"/>
+        <Button x:Name="btn_cancel" Click="btn_cancel_Click" Content="Cancel" Grid.Column="1" HorizontalAlignment="Left" Margin="100,243,0,0" VerticalAlignment="Top" Width="75"/>
+
+    </Grid>
+</Window>

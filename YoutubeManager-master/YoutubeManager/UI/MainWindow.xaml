@@ -1,0 +1,398 @@
+﻿<Window x:Class="YoutubeManager.UI.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:WpfUiConverter="clr-namespace:TqkLibrary.WpfUi.Converters;assembly=TqkLibrary.WpfUi"
+        xmlns:WpfUiControl="clr-namespace:TqkLibrary.WpfUi.UserControls;assembly=TqkLibrary.WpfUi"
+        xmlns:local="clr-namespace:YoutubeManager.UI"
+        xmlns:ViewModels="clr-namespace:YoutubeManager.UI.ViewModels"
+        xmlns:dd="urn:gong-wpf-dragdrop"
+        Name="root"
+        mc:Ignorable="d"
+        MinHeight="200" MinWidth="600"
+        Title="Youtube Manager" Height="450" Width="1235">
+    <Window.DataContext>
+        <ViewModels:MainWindowViewModel/>
+    </Window.DataContext>
+    <Window.CommandBindings>
+        <CommandBinding Command="Copy" Executed="CommandBinding_Executed"/>
+    </Window.CommandBindings>
+    <Window.Resources>
+        <WpfUiConverter:BooleanToVisibleConverter x:Key="TrueToVisibleConverter"/>
+        <WpfUiConverter:BooleanToVisibleConverter x:Key="FalseToVisibleConverter" IsReversedBool="True"/>
+        <WpfUiConverter:ListViewAlternationConverter x:Key="ListViewAlternationConverter"/>
+        <DataTemplate x:Key="GroupDragAdorner">
+            <StackPanel Orientation="Horizontal" Height="22">
+                <!--<Image Source="{Binding Img}" Width="16" HorizontalAlignment="Center" />-->
+                <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+            </StackPanel>
+        </DataTemplate>
+        <DataTemplate x:Key="ChannelDragAdorner">
+            <StackPanel Orientation="Horizontal" Height="32">
+                <Image Source="{Binding Icon}"/>
+                <TextBlock Text="{Binding Title}" VerticalAlignment="Center"/>
+            </StackPanel>
+        </DataTemplate>
+    </Window.Resources>
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="{Binding ColGridMain,Mode=TwoWay}" MinWidth="150" MaxWidth="400"/>
+            <ColumnDefinition MinWidth="600"/>
+        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="27"/>
+            <RowDefinition/>
+        </Grid.RowDefinitions>
+        <Grid>
+            <TextBox x:Name="tb_searchGroup" Height="20" Margin="5,0,44,3" TextWrapping="Wrap" TextChanged="tb_searchGroup_TextChanged" VerticalAlignment="Bottom" Grid.Row="0"/>
+            <Button x:Name="btn_searchGroupsClear" Click="btn_searchGroupsClear_Click" Content="Clear" HorizontalAlignment="Right" Margin="0,0,5,3" VerticalAlignment="Bottom" Width="34" Height="20"/>
+        </Grid>
+
+        <Grid Grid.Column="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition/>
+                <ColumnDefinition Width="430"/>
+            </Grid.ColumnDefinitions>
+            <Button x:Name="btn_setting" Click="btn_setting_Click" Content="Setting" Grid.Column="1" HorizontalAlignment="Right" Margin="0,0,5,3" VerticalAlignment="Bottom" Width="71" Height="20"/>
+            <Button x:Name="btn_restore" Click="btn_restore_Click" Content="Restore" Grid.Column="1" HorizontalAlignment="Right" Margin="0,0,81,3" VerticalAlignment="Bottom" Width="75" Height="20"/>
+            <Button x:Name="btn_backup" Click="btn_backup_Click" Content="Backup" Grid.Column="1" HorizontalAlignment="Right" Margin="0,0,161,3" VerticalAlignment="Bottom" Width="75" Height="20"/>
+            <Button x:Name="btn_cancel" Click="btn_cancel_Click" Grid.Column="1" HorizontalAlignment="Right" Margin="0,0,240,3" VerticalAlignment="Bottom" Width="181" VerticalContentAlignment="Stretch" HorizontalContentAlignment="Stretch" Height="20">
+                <Grid>
+                    <ProgressBar Value="{Binding ProgressValue}" Maximum="{Binding ProgressMax}" Visibility="{Binding ProgressIsVisibility,Converter={StaticResource TrueToVisibleConverter}}"/>
+                    <TextBlock Text="{Binding ProgressText}" TextAlignment="Center"/>
+                </Grid>
+            </Button>
+            <TextBox x:Name="tb_searchChannel" Height="20" Margin="40,0,44,3" TextWrapping="Wrap" TextChanged="tb_searchChannel_TextChanged" VerticalAlignment="Bottom" Grid.Row="0"/>
+            <Button x:Name="btn_searchChannelsClear" Click="btn_searchChannelsClear_Click" Content="Clear" HorizontalAlignment="Right" Margin="0,0,5,3" VerticalAlignment="Bottom" Width="34" Height="20"/>
+            <CheckBox Content="Id" IsChecked="{Binding IsFindById}" HorizontalAlignment="Left" Margin="5,7,0,0" VerticalAlignment="Top"/>
+        </Grid>
+
+
+        <ListView x:Name="LV_Groups" Margin="5" Grid.Row="1" ItemsSource="{Binding Groups}" SelectionMode="Single" 
+                  SelectionChanged="LV_Groups_SelectionChanged" SelectedItem="{Binding Groups.SelectedItem}" 
+                  KeyDown="LV_Groups_KeyDown" GridViewColumnHeader.Click="LV_Groups_Head_Click" AlternationCount="2"
+                  dd:DragDrop.IsDragSource="True" dd:DragDrop.IsDropTarget="True" dd:DragDrop.DragDirectlySelectedOnly="True"
+                  dd:DragDrop.DropHandler="{Binding Groups}" dd:DragDrop.DragAdornerTemplate="{StaticResource GroupDragAdorner}">
+            <ListView.View>
+                <GridView>
+                    <GridViewColumn Width="{Binding GroupNameColLength,Mode=TwoWay}" Header="Nhóm">
+                        <GridViewColumn.CellTemplate>
+                            <DataTemplate>
+                                <WpfUiControl:TextBlockEdit Text="{Binding Name}" IsEditing="{Binding IsEditing}"/>
+                            </DataTemplate>
+                        </GridViewColumn.CellTemplate>
+                    </GridViewColumn>
+                </GridView>
+            </ListView.View>
+            <ListView.ContextMenu>
+                <ContextMenu ItemsSource="{Binding GroupsMenu}">
+                    <ContextMenu.Resources>
+                        <ControlTemplate x:Key="MenuSeparatorTemplate">
+                            <Separator  IsEnabled="False" />
+                        </ControlTemplate>
+                        <Image x:Key="imgCTX" x:Shared="false" Source="{Binding Path=Img}"/>
+                    </ContextMenu.Resources>
+                    <ContextMenu.ItemContainerStyle>
+                        <Style TargetType="{x:Type MenuItem}">
+                            <Setter Property="Header" Value="{Binding ActionText}" />
+                            <Setter Property="Icon" Value="{StaticResource imgCTX}"/>
+                            <EventSetter Event="MenuItem.Click" Handler="LV_Group_MenuItem_Click" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding ''}" Value="{x:Null}">
+                                    <Setter Property="Template" Value="{StaticResource MenuSeparatorTemplate}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ContextMenu.ItemContainerStyle>
+                </ContextMenu>
+            </ListView.ContextMenu>
+            <ListView.ItemContainerStyle>
+                <Style TargetType="{x:Type ListViewItem}">
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                    <Setter Property="Visibility" Value="{Binding IsVisible,Converter={StaticResource TrueToVisibleConverter}}" />
+                    <Style.Triggers>
+                        <Trigger Property="ItemsControl.AlternationIndex" Value="0">
+                            <Setter Property="Background" Value="#ffffff"/>
+                        </Trigger>
+                        <Trigger Property="ItemsControl.AlternationIndex" Value="1">
+                            <Setter Property="Background" Value="#edebeb"/>
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter Property="Background" Value="#c8caf7"/>
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="BorderBrush" Value="#0e1deb"/>
+                        </Trigger>
+                    </Style.Triggers>
+                </Style>
+            </ListView.ItemContainerStyle>
+        </ListView>
+
+        <!--<Border Width="1" Grid.Column="0" Grid.Row="1" Grid.RowSpan="2" Background="Black" HorizontalAlignment="Right"/>-->
+
+        <GridSplitter Grid.Column="0" HorizontalAlignment="Right" Grid.Row="1" Width="1" Background="Transparent"/>
+
+        <ListView x:Name="LV_Channels" Margin="5" Grid.Row="1" Grid.Column="1" ItemsSource="{Binding Channels}" SelectionMode="Extended"
+                  VirtualizingStackPanel.IsVirtualizing="True" VirtualizingStackPanel.CleanUpVirtualizedItem="LV_Channels_CleanUpVirtualizedItem"
+                  KeyDown="LV_Channels_KeyDown" GridViewColumnHeader.Click="LV_Channels_Head_Click"
+                  dd:DragDrop.IsDragSource="True" dd:DragDrop.IsDropTarget="True" dd:DragDrop.DragDirectlySelectedOnly="True"
+                  dd:DragDrop.DropHandler="{Binding Channels}" dd:DragDrop.DragAdornerTemplate="{StaticResource ChannelDragAdorner}">
+            <ListView.InputBindings>
+                <KeyBinding Key="C" Modifiers="Ctrl" Command="Copy"/>
+            </ListView.InputBindings>
+            <ListView.View>
+                <GridView AllowsColumnReorder="False">
+                    <GridViewColumn Header="STT" Width="{Binding ChannelColSTT,Mode=TwoWay}">
+                        <GridViewColumn.CellTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding STT}" VerticalAlignment="Center"/>
+                            </DataTemplate>
+                        </GridViewColumn.CellTemplate>
+                    </GridViewColumn>
+
+                    <GridViewColumn Header="Icon" Width="{Binding ChannelColIcon,Mode=TwoWay}">
+                        <GridViewColumn.CellTemplate>
+                            <DataTemplate>
+                                <Image Source="{Binding Icon}"/>
+                            </DataTemplate>
+                        </GridViewColumn.CellTemplate>
+                    </GridViewColumn>
+
+                    <GridViewColumn Header="Tên" Width="{Binding ChannelColTitle,Mode=TwoWay}">
+                        <GridViewColumn.CellTemplate>
+                            <DataTemplate>
+                                <Grid Background="{Binding BackGround}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                                    <TextBlock Text="{Binding Title}" VerticalAlignment="Center"/>
+                                </Grid>
+                            </DataTemplate>
+                        </GridViewColumn.CellTemplate>
+                    </GridViewColumn>
+
+                    <GridViewColumn Header="Lần cuối" Width="{Binding ChannelColLastTime,Mode=TwoWay}">
+                        <GridViewColumn.CellTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding LastTime,StringFormat={}{0:dd/MM hh:mm}}" VerticalAlignment="Center"/>
+                            </DataTemplate>
+                        </GridViewColumn.CellTemplate>
+                    </GridViewColumn>
+
+                    <GridViewColumn Header="Video" Width="{Binding ChannelColVideoCount,Mode=TwoWay}">
+                        <GridViewColumn.CellTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding VideoCount,StringFormat='{}{0:#,#.}'}" TextAlignment="Right" VerticalAlignment="Center"/>
+                            </DataTemplate>
+                        </GridViewColumn.CellTemplate>
+                    </GridViewColumn>
+
+                    <GridViewColumn Header="Subscriber" Width="{Binding ChannelColSubscriberCount,Mode=TwoWay}">
+                        <GridViewColumn.CellTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding SubscriberCount,StringFormat='{}{0:#,#.}'}" TextAlignment="Right" VerticalAlignment="Center"/>
+                            </DataTemplate>
+                        </GridViewColumn.CellTemplate>
+                    </GridViewColumn>
+
+                    <GridViewColumn Header="View" Width="{Binding ChannelColViewCount,Mode=TwoWay}">
+                        <GridViewColumn.CellTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding ViewCount,StringFormat='{}{0:#,#.}'}" TextAlignment="Right" VerticalAlignment="Center"/>
+                            </DataTemplate>
+                        </GridViewColumn.CellTemplate>
+                    </GridViewColumn>
+                    
+                    <GridViewColumn Header="Biến động / Ngày" Width="{Binding ChannelColViewChangedCount,Mode=TwoWay}">
+                        <GridViewColumn.CellTemplate>
+                            <DataTemplate>
+                                <TextBlock TextAlignment="Right" VerticalAlignment="Center">
+                                    <Run Text="{Binding ViewCountChanged,StringFormat='{}{0:#,#.}',Mode=OneWay}"/>
+                                    <Run Text="/"/>
+                                    <Run Text="{Binding DayDiffUpdate,StringFormat='{}{0:dd}',Mode=OneWay}"/>
+                                </TextBlock>
+                            </DataTemplate>
+                        </GridViewColumn.CellTemplate>
+                    </GridViewColumn>
+
+
+                    <GridViewColumn Width="{Binding CustomCols[0].ColSize,Mode=TwoWay}">
+                        <GridViewColumn.Header>
+                            <GridViewColumnHeader>
+                                <WpfUiControl:TextBlockEdit Tag="0" Text="{Binding CustomCols[0].Name}" IsEditing="{Binding CustomCols[0].IsEditing}" MouseDown="tbe_CustomHead_MouseDown" HorizontalAlignment="Center"/>
+                            </GridViewColumnHeader>
+                        </GridViewColumn.Header>
+                        <GridViewColumn.CellTemplate>
+                            <DataTemplate>
+                                <WpfUiControl:TextBlockEdit Tag="0" Text="{Binding CustomColumnDatas[0].Text}" IsEditing="{Binding CustomColumnDatas[0].IsEditing}" ToolTip="{Binding CustomColumnDatas[0].Text}" MouseDown="tbe_CustomHeadData_MouseDown" VerticalAlignment="Center" Height="18"/>
+                            </DataTemplate>
+                        </GridViewColumn.CellTemplate>
+                    </GridViewColumn>
+                    <GridViewColumn Width="{Binding CustomCols[1].ColSize,Mode=TwoWay}">
+                        <GridViewColumn.Header>
+                            <GridViewColumnHeader>
+                                <WpfUiControl:TextBlockEdit Tag="1" Text="{Binding CustomCols[1].Name}" IsEditing="{Binding CustomCols[1].IsEditing}" MouseDown="tbe_CustomHead_MouseDown" HorizontalAlignment="Center"/>
+                            </GridViewColumnHeader>
+                        </GridViewColumn.Header>
+                        <GridViewColumn.CellTemplate>
+                            <DataTemplate>
+                                <WpfUiControl:TextBlockEdit Tag="1" Text="{Binding CustomColumnDatas[1].Text}" IsEditing="{Binding CustomColumnDatas[1].IsEditing}" ToolTip="{Binding CustomColumnDatas[1].Text}" MouseDown="tbe_CustomHeadData_MouseDown" VerticalAlignment="Center" Height="18"/>
+                            </DataTemplate>
+                        </GridViewColumn.CellTemplate>
+                    </GridViewColumn>
+                    <GridViewColumn Width="{Binding CustomCols[2].ColSize,Mode=TwoWay}">
+                        <GridViewColumn.Header>
+                            <GridViewColumnHeader>
+                                <WpfUiControl:TextBlockEdit Tag="2" Text="{Binding CustomCols[2].Name}" IsEditing="{Binding CustomCols[2].IsEditing}" MouseDown="tbe_CustomHead_MouseDown" HorizontalAlignment="Center"/>
+                            </GridViewColumnHeader>
+                        </GridViewColumn.Header>
+                        <GridViewColumn.CellTemplate>
+                            <DataTemplate>
+                                <WpfUiControl:TextBlockEdit Tag="2" Text="{Binding CustomColumnDatas[2].Text}" IsEditing="{Binding CustomColumnDatas[2].IsEditing}" ToolTip="{Binding CustomColumnDatas[2].Text}" MouseDown="tbe_CustomHeadData_MouseDown" VerticalAlignment="Center" Height="18"/>
+                            </DataTemplate>
+                        </GridViewColumn.CellTemplate>
+                    </GridViewColumn>
+                    <GridViewColumn Width="{Binding CustomCols[3].ColSize,Mode=TwoWay}">
+                        <GridViewColumn.Header>
+                            <GridViewColumnHeader>
+                                <WpfUiControl:TextBlockEdit Tag="3" Text="{Binding CustomCols[3].Name}" IsEditing="{Binding CustomCols[3].IsEditing}" MouseDown="tbe_CustomHead_MouseDown" HorizontalAlignment="Center"/>
+                            </GridViewColumnHeader>
+                        </GridViewColumn.Header>
+                        <GridViewColumn.CellTemplate>
+                            <DataTemplate>
+                                <WpfUiControl:TextBlockEdit Tag="3" Text="{Binding CustomColumnDatas[3].Text}" IsEditing="{Binding CustomColumnDatas[3].IsEditing}" ToolTip="{Binding CustomColumnDatas[3].Text}" MouseDown="tbe_CustomHeadData_MouseDown" VerticalAlignment="Center" Height="18"/>
+                            </DataTemplate>
+                        </GridViewColumn.CellTemplate>
+                    </GridViewColumn>
+                    <!--<GridViewColumn Width="{Binding CustomCols[4].ColSize,Mode=TwoWay}">
+                        <GridViewColumn.Header>
+                            <GridViewColumnHeader>
+                                <WpfUiControl:TextBlockEdit Tag="4" Text="{Binding CustomCols[4].Name}" IsEditing="{Binding CustomCols[4].IsEditing}" MouseDown="tbe_CustomHead_MouseDown" HorizontalAlignment="Center"/>
+                            </GridViewColumnHeader>
+                        </GridViewColumn.Header>
+                        <GridViewColumn.CellTemplate>
+                            <DataTemplate>
+                                <WpfUiControl:TextBlockEdit Tag="4" Text="{Binding CustomColumnDatas[4].Text}" IsEditing="{Binding CustomColumnDatas[4].IsEditing}" ToolTip="{Binding CustomColumnDatas[4].Text}" MouseDown="tbe_CustomHeadData_MouseDown" VerticalAlignment="Center" Height="18"/>
+                            </DataTemplate>
+                        </GridViewColumn.CellTemplate>
+                    </GridViewColumn>-->
+                    <!--<GridViewColumn Width="{Binding CustomCols[5].ColSize,Mode=TwoWay}">
+                        <GridViewColumn.Header>
+                            <GridViewColumnHeader>
+                                <WpfUiControl:TextBlockEdit Tag="5" Text="{Binding CustomCols[5].Name}" IsEditing="{Binding CustomCols[5].IsEditing}" MouseDown="tbe_CustomHead_MouseDown" HorizontalAlignment="Center"/>
+                            </GridViewColumnHeader>
+                        </GridViewColumn.Header>
+                        <GridViewColumn.CellTemplate>
+                            <DataTemplate>
+                                <WpfUiControl:TextBlockEdit Tag="5" Text="{Binding CustomColumnDatas[5].Text}" IsEditing="{Binding CustomColumnDatas[5].IsEditing}" ToolTip="{Binding CustomColumnDatas[5].Text}" MouseDown="tbe_CustomHeadData_MouseDown" VerticalAlignment="Center" Height="18"/>
+                            </DataTemplate>
+                        </GridViewColumn.CellTemplate>
+                    </GridViewColumn>-->
+                    <!--<GridViewColumn Width="{Binding CustomCols[6].ColSize,Mode=TwoWay}">
+                        <GridViewColumn.Header>
+                            <GridViewColumnHeader>
+                                <WpfUiControl:TextBlockEdit Tag="6" Text="{Binding CustomCols[6].Name}" IsEditing="{Binding CustomCols[6].IsEditing}" MouseDown="tbe_CustomHead_MouseDown" HorizontalAlignment="Center"/>
+                            </GridViewColumnHeader>
+                        </GridViewColumn.Header>
+                        <GridViewColumn.CellTemplate>
+                            <DataTemplate>
+                                <WpfUiControl:TextBlockEdit Tag="6" Text="{Binding CustomColumnDatas[6].Text}" IsEditing="{Binding CustomColumnDatas[6].IsEditing}" ToolTip="{Binding CustomColumnDatas[6].Text}" MouseDown="tbe_CustomHeadData_MouseDown" VerticalAlignment="Center" Height="18"/>
+                            </DataTemplate>
+                        </GridViewColumn.CellTemplate>
+                    </GridViewColumn>-->
+                    <!--<GridViewColumn Width="{Binding CustomCols[7].ColSize,Mode=TwoWay}">
+                        <GridViewColumn.Header>
+                            <GridViewColumnHeader>
+                                <WpfUiControl:TextBlockEdit Tag="7" Text="{Binding CustomCols[7].Name}" IsEditing="{Binding CustomCols[7].IsEditing}" MouseDown="tbe_CustomHead_MouseDown" HorizontalAlignment="Center"/>
+                            </GridViewColumnHeader>
+                        </GridViewColumn.Header>
+                        <GridViewColumn.CellTemplate>
+                            <DataTemplate>
+                                <WpfUiControl:TextBlockEdit Tag="7" Text="{Binding CustomColumnDatas[7].Text}" IsEditing="{Binding CustomColumnDatas[7].IsEditing}" ToolTip="{Binding CustomColumnDatas[7].Text}" MouseDown="tbe_CustomHeadData_MouseDown" VerticalAlignment="Center" Height="18"/>
+                            </DataTemplate>
+                        </GridViewColumn.CellTemplate>
+                    </GridViewColumn>-->
+                    <!--<GridViewColumn Width="{Binding CustomCols[8].ColSize,Mode=TwoWay}">
+                        <GridViewColumn.Header>
+                            <GridViewColumnHeader>
+                                <WpfUiControl:TextBlockEdit Tag="8" Text="{Binding CustomCols[8].Name}" IsEditing="{Binding CustomCols[8].IsEditing}" MouseDown="tbe_CustomHead_MouseDown" HorizontalAlignment="Center"/>
+                            </GridViewColumnHeader>
+                        </GridViewColumn.Header>
+                        <GridViewColumn.CellTemplate>
+                            <DataTemplate>
+                                <WpfUiControl:TextBlockEdit Tag="8" Text="{Binding CustomColumnDatas[8].Text}" IsEditing="{Binding CustomColumnDatas[8].IsEditing}" ToolTip="{Binding CustomColumnDatas[8].Text}" MouseDown="tbe_CustomHeadData_MouseDown" VerticalAlignment="Center" Height="18"/>
+                            </DataTemplate>
+                        </GridViewColumn.CellTemplate>
+                    </GridViewColumn>-->
+                    <!--<GridViewColumn Width="{Binding CustomCols[9].ColSize,Mode=TwoWay}">
+                        <GridViewColumn.Header>
+                            <GridViewColumnHeader>
+                                <WpfUiControl:TextBlockEdit Tag="9" Text="{Binding CustomCols[9].Name}" IsEditing="{Binding CustomCols[9].IsEditing}" MouseDown="tbe_CustomHead_MouseDown" HorizontalAlignment="Center"/>
+                            </GridViewColumnHeader>
+                        </GridViewColumn.Header>
+                        <GridViewColumn.CellTemplate>
+                            <DataTemplate>
+                                <WpfUiControl:TextBlockEdit Tag="9" Text="{Binding CustomColumnDatas[9].Text}" IsEditing="{Binding CustomColumnDatas[9].IsEditing}" ToolTip="{Binding CustomColumnDatas[9].Text}" MouseDown="tbe_CustomHeadData_MouseDown" VerticalAlignment="Center" Height="18"/>
+                            </DataTemplate>
+                        </GridViewColumn.CellTemplate>
+                    </GridViewColumn>-->
+
+
+                </GridView>
+            </ListView.View>
+            <ListView.ContextMenu>
+                <ContextMenu ItemsSource="{Binding ChannelsMenu}">
+                    <ContextMenu.Resources>
+                        <ControlTemplate x:Key="MenuSeparatorTemplate">
+                            <Separator  IsEnabled="False" />
+                        </ControlTemplate>
+                        <Image x:Key="imgCTX" x:Shared="false" Source="{Binding Path=Img}"/>
+                    </ContextMenu.Resources>
+                    <ContextMenu.ItemContainerStyle>
+                        <Style TargetType="{x:Type MenuItem}">
+                            <Setter Property="Header" Value="{Binding ActionText}" />
+                            <Setter Property="ItemsSource" Value="{Binding Childs}"/>
+                            <Setter Property="IsCheckable" Value="{Binding IsCheckable}"/>
+                            <Setter Property="IsChecked" Value="{Binding IsChecked}"/>
+                            <Setter Property="Icon" Value="{StaticResource imgCTX}"/>
+                            <EventSetter Event="MenuItem.Click" Handler="LV_Channel_MenuItem_Click" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding ''}" Value="{x:Null}">
+                                    <Setter Property="Template" Value="{StaticResource MenuSeparatorTemplate}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ContextMenu.ItemContainerStyle>
+                </ContextMenu>
+            </ListView.ContextMenu>
+            <ListView.ItemContainerStyle>
+                <Style TargetType="{x:Type ListViewItem}">
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                    <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+                    <EventSetter Event="MouseDoubleClick" Handler="ListViewItem_MouseDoubleClick"/>
+                    <EventSetter Event="PreviewMouseLeftButtonDown" Handler="ListViewItem_PreviewMouseLeftButtonDown"/>
+                    <Setter Property="Height" Value="32"/>
+                    <Setter Property="Margin" Value="0"/>
+                    <Setter Property="Padding" Value="0"/>
+                    <!--<Setter Property="Visibility" Value="{Binding IsVisible,Converter={StaticResource TrueToVisibleConverter}}" />-->
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding STT,Converter={StaticResource ListViewAlternationConverter}}" Value="True">
+                            <DataTrigger.Setters>
+                                <Setter Property="Background" Value="#edebeb"/>
+                            </DataTrigger.Setters>
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding STT,Converter={StaticResource ListViewAlternationConverter}}" Value="False">
+                            <DataTrigger.Setters>
+                                <Setter Property="Background" Value="#ffffff"/>
+                            </DataTrigger.Setters>
+                        </DataTrigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter Property="Background" Value="#c8caf7"/>
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="BorderBrush" Value="#0e1deb"/>
+                        </Trigger>
+                    </Style.Triggers>
+                </Style>
+            </ListView.ItemContainerStyle>
+        </ListView>
+    </Grid>
+</Window>

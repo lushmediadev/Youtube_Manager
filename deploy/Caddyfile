@@ -1,0 +1,5 @@
+ytm.jazzrelaxation.com {
+    encode zstd gzip
+
+    reverse_proxy ytm-app:8000
+}

@@ -1,0 +1,15 @@
+﻿<Window x:Class="GenKey.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:GenKey" Loaded="Window_Loaded"
+        mc:Ignorable="d"
+        Title="MainWindow" Height="130.213" Width="244.681" ResizeMode="NoResize" WindowStartupLocation="CenterScreen">
+    <Grid>
+        <Button x:Name="BT_Save" Content="Save" HorizontalAlignment="Left" Margin="10,62,0,0" VerticalAlignment="Top" Width="75" Click="BT_Save_Click"/>
+        <TextBlock x:Name="Key" Margin="10,10,10,0" TextWrapping="Wrap" Text="TextBlock" VerticalAlignment="Top" TextAlignment="Center"/>
+        <Button x:Name="BT_Close" Content="Close" HorizontalAlignment="Right" Margin="0,62,10,0" VerticalAlignment="Top" Width="75" Click="BT_Close_Click"/>
+
+    </Grid>
+</Window>

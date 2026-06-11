@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YouTube Manager - Đăng nhập</title>
+  <meta name="description" content="Đăng nhập YouTube Manager để quản lý nhóm và kênh YouTube.">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg?v=3">
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Inter:wght@400;500;600;700&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,300..400,0..1,0&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            primary: '#1a73e8',
+            'youtube-red': '#cc0000',
+            'surface': '#ffffff',
+            'panel': '#ffffff',
+            'secondary-text': '#5f6368'
+          },
+          fontFamily: {
+            display: ['Roboto', 'Inter', 'sans-serif']
+          },
+          borderRadius: {
+            DEFAULT: '0.25rem',
+            lg: '0.5rem',
+            xl: '0.75rem',
+            full: '9999px'
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    body {
+      font-family: "Roboto", "Inter", sans-serif;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+      background: linear-gradient(180deg, #f8f9fa 0%, #ffffff 100%);
+      min-height: 100vh;
+    }
+    .auth-input {
+      width: 100%;
+      appearance: none;
+      -webkit-appearance: none;
+      background: #ffffff !important;
+      background-color: #ffffff !important;
+      background-image: none !important;
+      background-clip: padding-box;
+      border: 1px solid rgba(0, 0, 0, 0.15);
+      border-radius: 10px !important;
+      padding: 13px 15px;
+      color: #202124;
+      font-size: 15px;
+      outline: none;
+      transition: border-color 160ms ease, box-shadow 160ms ease;
+      -webkit-text-fill-color: #202124;
+      caret-color: #202124;
+      box-shadow: none !important;
+    }
+    .auth-input:focus {
+      background: #ffffff !important;
+      background-color: #ffffff !important;
+      background-image: none !important;
+      border-color: rgba(0, 0, 0, 0.45);
+      box-shadow: none !important;
+    }
+    .auth-input::placeholder {
+      color: #9ca3af;
+      -webkit-text-fill-color: #9ca3af;
+    }
+    .auth-input:-webkit-autofill,
+    .auth-input:-webkit-autofill:hover,
+    .auth-input:-webkit-autofill:focus,
+    .auth-input:-webkit-autofill:active {
+      border-radius: 10px !important;
+      border-color: rgba(0, 0, 0, 0.15);
+      -webkit-text-fill-color: #202124 !important;
+      caret-color: #202124;
+      -webkit-box-shadow: 0 0 0 1000px #ffffff inset !important;
+      box-shadow: 0 0 0 1000px #ffffff inset !important;
+      transition: background-color 9999s ease-out 0s;
+    }
+    .auth-card {
+      background: #ffffff;
+      border: 1px solid rgba(0, 0, 0, 0.1);
+      border-radius: 16px;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+    }
+    .btn-submit {
+      width: 100%;
+      padding: 13px 22px;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      border: 1px solid #1a73e8;
+      background: #1a73e8;
+      color: #ffffff;
+      cursor: pointer;
+      transition: background 160ms ease, transform 100ms ease;
+    }
+    .btn-submit:hover { background: #1557b0; border-color: #1557b0; }
+    .btn-submit:active { transform: scale(0.985); }
+    .btn-submit:disabled { opacity: 0.55; cursor: not-allowed; }
+    .error-msg {
+      color: #c62828;
+      font-size: 13px;
+      font-weight: 600;
+      min-height: 20px;
+      text-align: center;
+    }
+    .form-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 650;
+      color: #606060;
+      margin-bottom: 8px;
+    }
+  </style>
+</head>
+<body class="flex min-h-screen items-center justify-center p-4">
+  <main class="w-full max-w-md">
+    <div class="mb-8 flex flex-col items-center">
+      <div class="mb-4 flex h-14 w-20 items-center justify-center">
+        <img src="youtube-mark.svg?v=3" class="h-11 w-16 object-contain" alt="" aria-hidden="true">
+      </div>
+      <h1 class="text-2xl font-bold tracking-tight text-[#202124]" style="font-family:'Roboto','Inter',sans-serif;">YouTube Manager</h1>
+      <p class="mt-1 text-sm text-secondary-text">Quản lý nhóm và theo dõi chỉ số kênh</p>
+    </div>
+
+    <section class="auth-card p-8">
+      <div class="mb-8">
+        <p class="mb-3 text-[11px] font-bold uppercase tracking-[0.18em] text-[#1a73e8]">Secure Access</p>
+        <h2 class="text-2xl font-bold text-[#202124]" style="font-family:'Roboto','Inter',sans-serif;">Đăng nhập</h2>
+      </div>
+
+      <form id="form-signin" class="space-y-4" autocomplete="on">
+        <div>
+          <label class="form-label" for="signin-username">Username</label>
+          <input id="signin-username" class="auth-input" type="text" placeholder="Nhập username" autocomplete="username" required>
+        </div>
+        <div>
+          <label class="form-label" for="signin-password">Password</label>
+          <input id="signin-password" class="auth-input" type="password" placeholder="Nhập password" autocomplete="current-password" required>
+        </div>
+        <div id="signin-error" class="error-msg"></div>
+        <button type="submit" class="btn-submit" id="btn-signin">Đăng nhập</button>
+      </form>
+    </section>
+
+    <p class="mt-6 text-center text-xs text-secondary-text opacity-70">YouTube Data API v3 public channel tracking</p>
+  </main>
+
+  <script>
+    const API_BASE = window.location.hostname === 'localhost'
+      ? 'http://localhost:8010/api'
+      : '/api';
+
+    (function checkAuth() {
+      const token = localStorage.getItem('ytmanager_token');
+      if (token) window.location.href = '/';
+    })();
+
+    document.getElementById('form-signin').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const errEl = document.getElementById('signin-error');
+      const btn = document.getElementById('btn-signin');
+      const username = document.getElementById('signin-username').value.trim();
+      const password = document.getElementById('signin-password').value;
+
+      errEl.textContent = '';
+      btn.disabled = true;
+      btn.textContent = 'Đang đăng nhập...';
+
+      try {
+        let res = await fetch(API_BASE + '/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+        let data = await res.json().catch(function() { return {}; });
+
+        if (res.status === 404 || res.status === 401) {
+          res = await fetch(API_BASE + '/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+          });
+          data = await res.json().catch(function() { return {}; });
+        }
+
+        if (!res.ok) {
+          throw new Error(data.detail || 'Không đăng nhập được');
+        }
+
+        localStorage.setItem('ytmanager_token', data.access_token || data.token);
+        localStorage.setItem('ytmanager_user', JSON.stringify(data.user || { username }));
+        window.location.href = '/';
+      } catch (err) {
+        errEl.textContent = err.message;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Đăng nhập';
+      }
+    });
+  </script>
+</body>
+</html>

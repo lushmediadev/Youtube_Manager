@@ -1,0 +1,27 @@
+﻿<Window x:Class="YoutubeManager.UI.SettingWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:YoutubeManager.UI"
+        xmlns:ViewModels="clr-namespace:YoutubeManager.UI.ViewModels"
+        xmlns:WpfUiControl="clr-namespace:TqkLibrary.WpfUi.UserControls;assembly=TqkLibrary.WpfUi"
+        mc:Ignorable="d"
+        xmlns:XceedWpfToolkit="http://schemas.xceed.com/wpf/xaml/toolkit"
+        Title="SettingWindow" Height="208" Width="475.928" WindowStartupLocation="CenterOwner">
+  <Window.DataContext>
+    <ViewModels:SettingWindowViewModel/>
+  </Window.DataContext>
+  <Grid>
+    <TextBox Margin="30,5,5,30" TextWrapping="Wrap" Text="{Binding ApiKeys}" AcceptsReturn="True"/>
+    <TextBlock HorizontalAlignment="Left" Margin="5,11,0,0" TextWrapping="Wrap" Text="Api:" VerticalAlignment="Top"/>
+    <TextBlock HorizontalAlignment="Left" Margin="10,0,0,8" Text="Số luồng:" VerticalAlignment="Bottom"/>
+    <XceedWpfToolkit:IntegerUpDown Minimum="1" Maximum="16" Value="{Binding ThreadCount}" Increment="1" Margin="65,0,0,5" VerticalAlignment="Bottom" HorizontalAlignment="Left" Width="57"/>
+    <Button x:Name="btn_checkapi" Click="btn_checkapi_Click" HorizontalAlignment="Right" Margin="0,0,5,5" VerticalAlignment="Bottom" Width="126">
+      <TextBlock>
+                <Run Text="Check Api "/>
+                <Run Text="{Binding ApiCheckMessage}"/>
+      </TextBlock>
+    </Button>
+  </Grid>
+</Window>

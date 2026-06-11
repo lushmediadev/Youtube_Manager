@@ -1,0 +1,36 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.3.32901.215
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "YoutubeManager", "YoutubeManager\YoutubeManager.csproj", "{DEF9BCDE-DE0D-413D-8704-AE45E554F8A5}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "GenKey", "GenKey\GenKey.csproj", "{2B7E8DCD-C91A-408D-ACDD-DB6455F5168E}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+		ReleaseKey|Any CPU = ReleaseKey|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{DEF9BCDE-DE0D-413D-8704-AE45E554F8A5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DEF9BCDE-DE0D-413D-8704-AE45E554F8A5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DEF9BCDE-DE0D-413D-8704-AE45E554F8A5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DEF9BCDE-DE0D-413D-8704-AE45E554F8A5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DEF9BCDE-DE0D-413D-8704-AE45E554F8A5}.ReleaseKey|Any CPU.ActiveCfg = ReleaseKey|Any CPU
+		{DEF9BCDE-DE0D-413D-8704-AE45E554F8A5}.ReleaseKey|Any CPU.Build.0 = ReleaseKey|Any CPU
+		{2B7E8DCD-C91A-408D-ACDD-DB6455F5168E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2B7E8DCD-C91A-408D-ACDD-DB6455F5168E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2B7E8DCD-C91A-408D-ACDD-DB6455F5168E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2B7E8DCD-C91A-408D-ACDD-DB6455F5168E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2B7E8DCD-C91A-408D-ACDD-DB6455F5168E}.ReleaseKey|Any CPU.ActiveCfg = Release|Any CPU
+		{2B7E8DCD-C91A-408D-ACDD-DB6455F5168E}.ReleaseKey|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {73305A5C-E2FF-4007-A939-E319C17F33EE}
+	EndGlobalSection
+EndGlobal

@@ -1,0 +1,24 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<OutputType>WinExe</OutputType>
+		<TargetFrameworks>net8.0-windows10.0.17763</TargetFrameworks>
+		<LangVersion>12.0</LangVersion>
+		<UseWPF>true</UseWPF>
+		<PreserveCompilationContext>false</PreserveCompilationContext>
+		<GenerateDependencyFile>false</GenerateDependencyFile>
+		<ProduceReferenceAssembly>false</ProduceReferenceAssembly>
+		<Platforms>AnyCPU</Platforms>
+		<AutoGenerateBindingRedirects>False</AutoGenerateBindingRedirects>
+		<IsPublishable>False</IsPublishable>
+		<PlatformTarget>AnyCPU</PlatformTarget>
+	</PropertyGroup>
+	
+	<Target Name="PostBuild" AfterTargets="PostBuildEvent">
+		<Exec Command="xcopy $(OutDir)\runtimes\win\lib\net8.0\System.Management.dll $(OutDir)\System.Management.dll /y" />
+	</Target>
+	
+	<ItemGroup>
+	  <PackageReference Include="TqkLibrary.WinApi" Version="1.0.0-build20250220173957" />
+	</ItemGroup>
+	
+</Project>

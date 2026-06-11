@@ -1,0 +1,78 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<OutputType>WinExe</OutputType>
+		<TargetFrameworks>net8.0-windows10.0.17763</TargetFrameworks>
+		<LangVersion>12.0</LangVersion>
+		<UseWPF>true</UseWPF>
+		<Nullable>enable</Nullable>
+		<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+		<PathMap>$(MSBuildProjectDirectory)=$(MSBuildProjectName)</PathMap>
+		<BaseIntermediateOutputPath>$(MSBuildProjectDirectory)\obj\$(MSBuildProjectName)\</BaseIntermediateOutputPath>
+		<ApplicationIcon>Resources\favicon.ico</ApplicationIcon>
+		<Configurations>Debug;Release;ReleaseKey</Configurations>
+		<PlatformTarget>AnyCPU</PlatformTarget>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="$(Configuration) == 'Release'">
+		<AssemblyName>YoutubeManagerNonKey</AssemblyName>
+		<Optimize>True</Optimize>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)'=='ReleaseKey'">
+		<DefineConstants>$(DefineConstants);Key;RELEASE</DefineConstants>
+		<OutputPath>bin\Release</OutputPath>
+		<Optimize>True</Optimize>
+	</PropertyGroup>
+	
+	<ItemGroup>
+		<ProjectReference Include="..\GenKey\GenKey.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Google.Apis.YouTube.v3" Version="1.69.0.3707" />
+		<PackageReference Include="Extended.Wpf.Toolkit" Version="4.5.0" />
+		<PackageReference Include="gong-wpf-dragdrop" Version="2.3.2" />
+		<PackageReference Include="TqkLibrary.Data.Json" Version="1.0.0-build20240628151114" />
+		<PackageReference Include="TqkLibrary.Linq" Version="1.0.0-build20240904192925" />
+		<PackageReference Include="TqkLibrary.Net" Version="1.0.0-build2022081500" />
+		<PackageReference Include="TqkLibrary.Queues" Version="1.0.0-build20240416101957" />
+		<PackageReference Include="TqkLibrary.Utils" Version="1.0.0-build20250205111854" />
+		<PackageReference Include="TqkLibrary.WpfUi" Version="1.0.0-build20250328172423" />
+		<PackageReference Include="Microsoft-WindowsAPICodePack-Shell" Version="1.1.5" />
+		<PackageReference Include="YoutubeExplode" Version="6.5.4" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Compile Remove="obj\**" />
+		<EmbeddedResource Remove="obj\**" />
+		<None Remove="obj\**" />
+		<Page Remove="obj\**" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Compile Update="Resource.Designer.cs">
+			<DesignTime>True</DesignTime>
+			<AutoGen>True</AutoGen>
+			<DependentUpon>Resource.resx</DependentUpon>
+		</Compile>
+	</ItemGroup>
+
+	<ItemGroup>
+		<EmbeddedResource Update="Resource.resx">
+			<Generator>ResXFileCodeGenerator</Generator>
+			<LastGenOutput>Resource.Designer.cs</LastGenOutput>
+		</EmbeddedResource>
+	</ItemGroup>
+	
+	<ItemGroup>
+		<Compile Update="Resource.Designer.cs">
+			<DesignTime>True</DesignTime>
+		</Compile>
+	</ItemGroup>
+
+	<Target Name="PostBuild" AfterTargets="PostBuildEvent">
+		<Exec Command="xcopy $(OutDir)\runtimes\win\lib\net8.0\System.Management.dll $(OutDir)\System.Management.dll /y" />
+	</Target>
+	
+	
+</Project>
