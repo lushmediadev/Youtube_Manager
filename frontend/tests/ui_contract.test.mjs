@@ -117,17 +117,21 @@ test("search sort and owner filter avoid forced skeleton when cached data exists
 });
 
 test("row and group selection expose toolbar actions and keyboard shortcuts", () => {
-  assert.match(indexHtml, /id="btn-select-all-rows"/);
+  assert.doesNotMatch(indexHtml, /id="btn-select-all-rows"/);
+  assert.doesNotMatch(indexHtml, /id="btn-select-all-groups"/);
+  assert.match(indexHtml, /id="row-selection-toolbar"/);
+  assert.match(indexHtml, /id="group-selection-toolbar"/);
   assert.match(indexHtml, /id="btn-delete-selection"/);
-  assert.match(indexHtml, /id="btn-select-all-groups"/);
   assert.match(indexHtml, /id="btn-delete-groups"/);
   assert.match(appJs, /selectedGroups:\s*new Set\(\)/);
   assert.match(appJs, /selectionScope:\s*'rows'/);
   assert.match(appJs, /function selectAllRows/);
   assert.match(appJs, /function selectAllGroups/);
+  assert.match(appJs, /state\.lastSelectedGroupId = group\.dataset\.group === ALL_GROUP_ID \? null : group\.dataset\.group;/);
   assert.match(appJs, /\(e\.ctrlKey \|\| e\.metaKey\) && e\.key\.toLowerCase\(\) === 'a'/);
   assert.match(appJs, /e\.key === 'Delete' \|\| e\.key === 'Backspace'/);
   assert.match(styleCss, /\.selection-toolbar/);
+  assert.match(styleCss, /\.selection-toolbar\.hidden/);
   assert.match(styleCss, /\.group-row\.is-selected/);
 });
 

@@ -837,6 +837,10 @@ h3 {
   gap: 6px;
 }
 
+.selection-toolbar.hidden {
+  display: none !important;
+}
+
 .selection-toolbar .hidden {
   display: none !important;
 }

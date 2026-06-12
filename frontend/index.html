@@ -77,11 +77,7 @@
                 <span class="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-secondary-text text-[18px]">search</span>
                 <input id="group-search" type="text" placeholder="Search groups..." class="w-full bg-[#f1f3f4] border border-[#e5e5e5] rounded-lg pl-9 pr-3 py-2 text-sm text-[#202124] placeholder-[#909090] focus:outline-none focus:border-[#d8d8d8]">
             </div>
-            <div class="selection-toolbar group-selection-toolbar" aria-label="Group selection actions">
-                <button id="btn-select-all-groups" type="button" class="selection-action-btn" data-selection-action="select-all-groups" title="Ctrl+A khi focus ở Groups">
-                    <span class="material-symbols-outlined">select_all</span>
-                    All groups
-                </button>
+            <div id="group-selection-toolbar" class="selection-toolbar group-selection-toolbar hidden" aria-label="Group selection actions">
                 <span id="group-selection-count" class="selection-count"></span>
                 <button id="btn-clear-groups" type="button" class="selection-icon-btn hidden" data-selection-action="clear-groups" title="Clear group selection">
                     <span class="material-symbols-outlined">close</span>
@@ -211,11 +207,7 @@
             </div>
             <div class="flex items-center gap-4">
                 <button id="btn-clear-list" class="hidden hover:text-[#202124] transition-colors cursor-pointer">Clear List</button>
-                <div class="selection-toolbar row-selection-toolbar" aria-label="Row selection actions">
-                    <button id="btn-select-all-rows" type="button" class="selection-action-btn hidden" data-selection-action="select-all-rows" title="Ctrl+A khi focus ở list">
-                        <span class="material-symbols-outlined">select_all</span>
-                        Select all
-                    </button>
+                <div id="row-selection-toolbar" class="selection-toolbar row-selection-toolbar hidden" aria-label="Row selection actions">
                     <button id="btn-clear-selection" type="button" class="selection-icon-btn hidden" data-selection-action="clear-rows" title="Clear selected rows">
                         <span class="material-symbols-outlined">close</span>
                     </button>
@@ -339,6 +331,6 @@
 
     <div id="context-menu" class="row-context-menu hidden"></div>
     <div id="toast-container" class="toast-container"></div>
-    <script src="app.js?v=ytm-13"></script>
+    <script src="app.js?v=ytm-14"></script>
 </body>
 </html>

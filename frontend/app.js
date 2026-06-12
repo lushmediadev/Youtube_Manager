@@ -354,9 +354,10 @@ function updateSelectionActions() {
   const groupCountValue = state.selectedGroups.size;
   qs('footer-selected') && (qs('footer-selected').textContent = rowCount);
   qs('kpi-selected') && (qs('kpi-selected').textContent = rowCount);
+  qs('row-selection-toolbar')?.classList.toggle('hidden', rowCount === 0);
   qs('btn-clear-selection')?.classList.toggle('hidden', rowCount === 0);
   qs('btn-delete-selection')?.classList.toggle('hidden', rowCount === 0);
-  qs('btn-select-all-rows')?.classList.toggle('hidden', state.view !== 'links' || !state.listTotal);
+  qs('group-selection-toolbar')?.classList.toggle('hidden', groupCountValue === 0);
   qs('btn-clear-groups')?.classList.toggle('hidden', groupCountValue === 0);
   qs('btn-delete-groups')?.classList.toggle('hidden', groupCountValue === 0);
   qs('group-selection-count') && (qs('group-selection-count').textContent = groupCountValue ? `${groupCountValue} selected` : '');
@@ -2767,11 +2768,13 @@ function bindEvents() {
     if (del) return deleteGroup(del.dataset.deleteGroup).catch((err) => toast(err.message, 'error'));
     if (group) {
       if ((e.shiftKey || e.ctrlKey || e.metaKey) && toggleGroupSelection(group.dataset.group, e)) {
+        e.preventDefault();
         renderGroups();
         return;
       }
       setSelectionScope('groups');
       clearGroupSelection();
+      state.lastSelectedGroupId = group.dataset.group === ALL_GROUP_ID ? null : group.dataset.group;
       setActiveGroup(group.dataset.group);
       showInstantListOrPending(getBackendListParams());
       loadItemsInBackground();
