@@ -65,7 +65,7 @@ test("list navigation renders pending state before network responses", () => {
   assert.match(appJs, /function showListPending/);
   assert.match(appJs, /function loadItemsInBackground/);
   assert.match(appJs, /if \(!options\.skipQueue\) queueVirtualPagesForRange\(start, end\)/);
-  assert.match(appJs, /showListPending\(getBackendListParams\(\)\);\s*loadItemsInBackground\(\);/);
+  assert.match(appJs, /showInstantListOrPending\(getBackendListParams\(\)\);\s*loadItemsInBackground\(\);/);
   assert.match(appJs, /Promise\.all\(\[loadGroups\(\), loadItems\(\)\]\)\.catch/);
 });
 
@@ -96,4 +96,13 @@ test("list scopes preload cached first pages and warm current pages in backgroun
 test("delta display never renders zero day denominators", () => {
   assert.match(appJs, /function renderDelta/);
   assert.match(appJs, /Math\.max\(1, Number\(item\.delta_days\) \|\| 1\)/);
+});
+
+test("small group navigation hydrates cached rows before showing placeholders", () => {
+  assert.match(appJs, /function saveDerivedGroupCachesFromLoadedItems/);
+  assert.match(appJs, /state\.listTotal === loadedItems\.length/);
+  assert.match(appJs, /function seedGroupCacheFromAllCache/);
+  assert.match(appJs, /function showInstantListOrPending/);
+  assert.match(appJs, /seedGroupCacheFromAllCache\(params\);\s*if \(hydrateListCache\(params\)\) return true;/);
+  assert.match(appJs, /showInstantListOrPending\(getBackendListParams\(\)\);\s*loadItemsInBackground\(\);/);
 });

@@ -847,6 +847,83 @@ function saveListSnapshotCache(params, snapshot = {}) {
   });
 }
 
+function groupSummaryForItems(items) {
+  const groups = new Map();
+  items.forEach((item) => {
+    if (!item.group) return;
+    groups.set(item.group, (groups.get(item.group) || 0) + 1);
+  });
+  return [...groups.entries()]
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'vi', { sensitivity: 'base', numeric: true }));
+}
+
+function saveDerivedGroupCachesFromLoadedItems(params = getBackendListParams()) {
+  if (params.search || params.sort || params.sort_direction) return;
+  const loadedItems = getLoadedVirtualItems();
+  if (!loadedItems.length) return;
+  const currentUserId = params.user_id || '';
+  const allParams = { ...params };
+  delete allParams.group;
+  if (!params.group && state.listTotal === loadedItems.length && loadedItems.length <= CONFIG.LIST_PAGE_SIZE) {
+    const summaryGroups = groupSummaryForItems(loadedItems);
+    saveListSnapshotCache(allParams, {
+      itemSummary: {
+        total: loadedItems.length,
+        all_total: loadedItems.length,
+        active: loadedItems.filter((item) => item.status === 'active').length,
+        errors: loadedItems.filter((item) => item.status === 'error').length,
+        crawling: loadedItems.filter((item) => item.status === 'crawling').length,
+        groups: summaryGroups,
+      },
+      total: loadedItems.length,
+      items: loadedItems,
+    });
+    summaryGroups.forEach(({ name, count }) => {
+      const groupItems = loadedItems.filter((item) => item.group === name);
+      saveListSnapshotCache({ ...(currentUserId ? { user_id: currentUserId } : {}), group: name }, {
+        itemSummary: {
+          total: count,
+          all_total: loadedItems.length,
+          active: groupItems.filter((item) => item.status === 'active').length,
+          errors: groupItems.filter((item) => item.status === 'error').length,
+          crawling: groupItems.filter((item) => item.status === 'crawling').length,
+          groups: summaryGroups,
+        },
+        total: count,
+        items: groupItems,
+      });
+    });
+  }
+}
+
+function seedGroupCacheFromAllCache(params = getBackendListParams()) {
+  if (!params.group || params.search || params.sort || params.sort_direction) return false;
+  const allParams = { ...params };
+  delete allParams.group;
+  const cached = readJsonStorage(listCacheKey(allParams));
+  if (!cached || Date.now() - Number(cached.cached_at || 0) > LIST_CACHE_TTL_MS) return false;
+  const allItems = Array.isArray(cached.items) ? cached.items : [];
+  const total = Number(cached.total) || allItems.length;
+  if (!allItems.length || total !== allItems.length || total > CONFIG.LIST_PAGE_SIZE) return false;
+  const groupItems = allItems.filter((item) => item.group === params.group);
+  const summaryGroups = Array.isArray(cached.itemSummary?.groups) ? cached.itemSummary.groups : groupSummaryForItems(allItems);
+  const groupSummary = summaryGroups.find((group) => group.name === params.group);
+  saveListSnapshotCache(params, {
+    itemSummary: {
+      total: groupSummary?.count ?? groupItems.length,
+      all_total: cached.itemSummary?.all_total ?? total,
+      active: groupItems.filter((item) => item.status === 'active').length,
+      errors: groupItems.filter((item) => item.status === 'error').length,
+      crawling: groupItems.filter((item) => item.status === 'crawling').length,
+      groups: summaryGroups,
+    },
+    total: groupSummary?.count ?? groupItems.length,
+    items: groupItems,
+  });
+  return true;
+}
+
 function hydrateListCache(params = getBackendListParams()) {
   const cached = readJsonStorage(listCacheKey(params));
   if (!cached || Date.now() - Number(cached.cached_at || 0) > LIST_CACHE_TTL_MS) return false;
@@ -862,6 +939,13 @@ function hydrateListCache(params = getBackendListParams()) {
   renderModalGroups();
   renderRows({ skipQueue: true });
   return true;
+}
+
+function showInstantListOrPending(params = getBackendListParams(), options = {}) {
+  seedGroupCacheFromAllCache(params);
+  if (hydrateListCache(params)) return true;
+  showListPending(params, options);
+  return false;
 }
 
 function pageOffsetForIndex(index) {
@@ -882,6 +966,7 @@ async function loadVirtualPage(offset, options = {}) {
         renderGroups();
         renderRows({ preserveScroll: true });
       }
+      saveDerivedGroupCachesFromLoadedItems(state.currentListParams);
     })
     .catch((err) => {
       if (!options.silent) toast(err.message || 'Không tải được dữ liệu', 'error');
@@ -1169,6 +1254,7 @@ async function loadItems(options = {}) {
   renderModalGroups();
   renderRows({ preserveScroll: options.preserveScroll });
   saveListCache(params);
+  saveDerivedGroupCachesFromLoadedItems(params);
   scheduleListPreloads();
 }
 
@@ -1648,7 +1734,7 @@ async function handleContextAction(action, groupValue = null) {
   }
   if (action === 'select-group') {
     setActiveGroup(state.contextGroup || ALL_GROUP_ID);
-    showListPending(getBackendListParams());
+    showInstantListOrPending(getBackendListParams());
     loadItemsInBackground();
     return;
   }
@@ -2209,7 +2295,7 @@ function bindEvents() {
     if (del) return deleteGroup(del.dataset.deleteGroup).catch((err) => toast(err.message, 'error'));
     if (group) {
       setActiveGroup(group.dataset.group);
-      showListPending(getBackendListParams());
+      showInstantListOrPending(getBackendListParams());
       loadItemsInBackground();
     }
   });
