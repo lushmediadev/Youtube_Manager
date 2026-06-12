@@ -21,6 +21,8 @@ const state = {
   items: [],
   filteredItems: [],
   selected: new Set(),
+  selectedGroups: new Set(),
+  selectionScope: 'rows',
   activeGroup: ALL_GROUP_ID,
   groupSearch: '',
   search: '',
@@ -43,6 +45,7 @@ const state = {
   sortKey: 'stt',
   sortDir: 'asc',
   lastSelectedRowKey: null,
+  lastSelectedGroupId: null,
   preferences: {},
   rowOrder: [],
   draggingRowKeys: [],
@@ -270,16 +273,34 @@ function itemsByKeys(keys) {
   const wanted = new Set(keys.map(String));
   return state.items.filter((item) => wanted.has(itemKey(item)));
 }
+function setSelectionScope(scope) {
+  state.selectionScope = scope === 'groups' ? 'groups' : 'rows';
+}
 function clearSelection() {
   if (!state.selected.size) return false;
   state.selected.clear();
   state.lastSelectedRowKey = null;
+  updateSelectionActions();
   return true;
 }
+function clearGroupSelection() {
+  if (!state.selectedGroups.size) return false;
+  state.selectedGroups.clear();
+  state.lastSelectedGroupId = null;
+  updateSelectionActions();
+  return true;
+}
+function clearAllSelections() {
+  const hadRows = clearSelection();
+  const hadGroups = clearGroupSelection();
+  return hadRows || hadGroups;
+}
 function shouldClearSelectionFromClick(event) {
-  if (state.view !== 'links' || !state.selected.size) return false;
+  if (state.view !== 'links' || (!state.selected.size && !state.selectedGroups.size)) return false;
   const target = event.target;
   if (target.closest('[data-row-id]')) return false;
+  if (target.closest('#group-panel')) return false;
+  if (target.closest('[data-selection-action]')) return false;
   if (target.closest('#context-menu')) return false;
   return true;
 }
@@ -291,7 +312,103 @@ function selectRowRange(targetKey) {
   const [start, end] = targetIndex < anchorIndex ? [targetIndex, anchorIndex] : [anchorIndex, targetIndex];
   keys.slice(start, end + 1).forEach((key) => state.selected.add(key));
   state.lastSelectedRowKey = String(targetKey);
+  updateSelectionActions();
   return true;
+}
+function visibleGroupIds() {
+  return allGroupsFromItems()
+    .filter((g) => g.toLowerCase().includes(state.groupSearch.toLowerCase()))
+    .map(String);
+}
+function selectGroupRange(targetGroupId) {
+  const groups = visibleGroupIds();
+  const targetIndex = groups.indexOf(String(targetGroupId));
+  const anchorIndex = groups.indexOf(String(state.lastSelectedGroupId));
+  if (targetIndex < 0 || anchorIndex < 0) return false;
+  const [start, end] = targetIndex < anchorIndex ? [targetIndex, anchorIndex] : [anchorIndex, targetIndex];
+  groups.slice(start, end + 1).forEach((id) => state.selectedGroups.add(id));
+  state.lastSelectedGroupId = String(targetGroupId);
+  updateSelectionActions();
+  return true;
+}
+function selectAllRows() {
+  const keys = visibleRowKeys();
+  state.selected = new Set(keys);
+  state.lastSelectedRowKey = keys[keys.length - 1] || null;
+  setSelectionScope('rows');
+  clearGroupSelection();
+  updateSelectionActions();
+  return keys.length;
+}
+function selectAllGroups() {
+  const groups = visibleGroupIds();
+  state.selectedGroups = new Set(groups);
+  state.lastSelectedGroupId = groups[groups.length - 1] || null;
+  setSelectionScope('groups');
+  clearSelection();
+  updateSelectionActions();
+  return groups.length;
+}
+function updateSelectionActions() {
+  const rowCount = state.selected.size;
+  const groupCountValue = state.selectedGroups.size;
+  qs('footer-selected') && (qs('footer-selected').textContent = rowCount);
+  qs('kpi-selected') && (qs('kpi-selected').textContent = rowCount);
+  qs('btn-clear-selection')?.classList.toggle('hidden', rowCount === 0);
+  qs('btn-delete-selection')?.classList.toggle('hidden', rowCount === 0);
+  qs('btn-select-all-rows')?.classList.toggle('hidden', state.view !== 'links' || !state.listTotal);
+  qs('btn-clear-groups')?.classList.toggle('hidden', groupCountValue === 0);
+  qs('btn-delete-groups')?.classList.toggle('hidden', groupCountValue === 0);
+  qs('group-selection-count') && (qs('group-selection-count').textContent = groupCountValue ? `${groupCountValue} selected` : '');
+}
+function isTypingTarget(target) {
+  return Boolean(target?.closest?.('input, textarea, select, [contenteditable="true"]'));
+}
+function preferredSelectionScope(target) {
+  const eventTarget = target instanceof Element ? target : null;
+  const active = document.activeElement instanceof Element ? document.activeElement : null;
+  if (eventTarget?.closest?.('#group-panel') || active?.closest?.('#group-panel')) return 'groups';
+  if (eventTarget?.closest?.('#links-view, #link-list') || active?.closest?.('#links-view, #link-list')) return 'rows';
+  return state.selectionScope === 'groups' ? 'groups' : 'rows';
+}
+function toggleGroupSelection(groupId, event = {}) {
+  if (!groupId || groupId === ALL_GROUP_ID) return false;
+  setSelectionScope('groups');
+  clearSelection();
+  if (event.shiftKey && state.lastSelectedGroupId && selectGroupRange(groupId)) return true;
+  if (event.ctrlKey || event.metaKey) {
+    if (state.selectedGroups.has(groupId)) state.selectedGroups.delete(groupId);
+    else state.selectedGroups.add(groupId);
+  } else {
+    state.selectedGroups = new Set([groupId]);
+  }
+  state.lastSelectedGroupId = groupId;
+  updateSelectionActions();
+  return true;
+}
+async function handleSelectionAction(action) {
+  if (action === 'select-all-rows') {
+    selectAllRows();
+    renderRows({ preserveScroll: true });
+    return;
+  }
+  if (action === 'clear-rows') {
+    clearSelection();
+    renderRows({ preserveScroll: true });
+    return;
+  }
+  if (action === 'delete-rows') return deleteSelected();
+  if (action === 'select-all-groups') {
+    selectAllGroups();
+    renderGroups();
+    return;
+  }
+  if (action === 'clear-groups') {
+    clearGroupSelection();
+    renderGroups();
+    return;
+  }
+  if (action === 'delete-groups') return deleteGroups([...state.selectedGroups]);
 }
 function contextGroupForItems(items = []) {
   if (state.activeGroup !== ALL_GROUP_ID) return state.activeGroup;
@@ -686,12 +803,13 @@ function renderGroups() {
       }
       const count = groupCount(name);
       const isAct = name === state.activeGroup;
+      const isSelected = state.selectedGroups.has(name);
       const badgeClass = isAct ? 'bg-[#e5e5e5] text-[#0f0f0f]' : 'bg-black/5 text-secondary-text';
       const isDragging = state.draggingGroupId === name;
       const isOver = state.dragOverGroupId === name && !isDragging;
       const dropClass = isOver ? `group-item-drop-target group-drop-${state.dragOverGroupPlacement}` : '';
-      return `<div class="group-row group-item w-full ${isDragging ? 'group-item-dragging' : ''} ${dropClass}" draggable="true" data-group-row="${escapeHtml(name)}">
-        <button class="group-row-main w-full flex items-center justify-between px-3 py-2.5 rounded-lg ${activeClass(name)}" data-group="${escapeHtml(name)}">
+      return `<div class="group-row group-item w-full ${isSelected ? 'is-selected' : ''} ${isDragging ? 'group-item-dragging' : ''} ${dropClass}" draggable="true" data-group-row="${escapeHtml(name)}">
+        <button class="group-row-main w-full flex items-center justify-between px-3 py-2.5 rounded-lg ${activeClass(name)}" data-group="${escapeHtml(name)}" aria-selected="${isSelected ? 'true' : 'false'}">
           <span class="flex items-center gap-3 min-w-0">
             <span class="material-symbols-outlined text-[#cc0000] text-sm">folder</span>
             <span class="truncate text-[14px] font-semibold">${escapeHtml(name)}</span>
@@ -707,6 +825,7 @@ function renderGroups() {
   ];
   list.innerHTML = rows.join('');
   if (state.inlineGroupEdit) focusInlineGroupInput();
+  updateSelectionActions();
 }
 
 function renderModalGroups() {
@@ -1255,6 +1374,7 @@ function updateStats() {
       ['footer-total', total], ['footer-active', '...'], ['footer-errors', '...'], ['footer-crawling', '...'], ['footer-selected', state.selected.size],
     ].forEach(([id, value]) => { const el = qs(id); if (el) el.textContent = value; });
     qs('btn-clear-list').classList.toggle('hidden', true);
+    updateSelectionActions();
     return;
   }
   const summary = state.itemSummary || {};
@@ -1268,6 +1388,7 @@ function updateStats() {
     ['footer-total', total], ['footer-active', active], ['footer-errors', errors], ['footer-crawling', crawling], ['footer-selected', state.selected.size],
   ].forEach(([id, value]) => { const el = qs(id); if (el) el.textContent = value; });
   qs('btn-clear-list').classList.toggle('hidden', total === 0);
+  updateSelectionActions();
 }
 
 async function loadItems(options = {}) {
@@ -1448,12 +1569,22 @@ async function commitInlineGroupEdit() {
   await loadItems();
 }
 async function deleteGroup(name) {
-  if (!confirm(`Xóa group "${name}"? Channel sẽ được đưa về No group.`)) return;
-  await api.renameGroup(name, '', targetUserId() || null);
-  state.groups = state.groups.filter((g) => g !== name);
+  await deleteGroups([name]);
+}
+async function deleteGroups(names = []) {
+  const targets = Array.from(new Set(names.map(String).filter(Boolean))).filter((name) => name !== ALL_GROUP_ID);
+  if (!targets.length) return toast('Chưa chọn group', 'info');
+  const label = targets.length === 1 ? `group "${targets[0]}"` : `${targets.length} groups`;
+  if (!confirm(`Xóa ${label}? Channel sẽ được đưa về No group.`)) return;
+  for (const name of targets) {
+    await api.renameGroup(name, '', targetUserId() || null);
+  }
+  state.groups = state.groups.filter((g) => !targets.includes(g));
   await saveGroups();
+  targets.forEach((name) => state.selectedGroups.delete(name));
+  state.lastSelectedGroupId = null;
   invalidateItemCaches();
-  if (state.activeGroup === name) state.activeGroup = ALL_GROUP_ID;
+  if (targets.includes(state.activeGroup)) state.activeGroup = ALL_GROUP_ID;
   await loadItems();
 }
 async function moveSelectedToGroup() {
@@ -1470,11 +1601,12 @@ async function moveSelectedToGroup() {
   await loadItems();
 }
 async function deleteSelected() {
-  const items = selectedItems();
-  if (!items.length) return toast('Chưa chọn row', 'error');
-  if (!confirm(`Xóa ${items.length} kênh đã chọn?`)) return;
-  for (const item of items) await api.deleteItem(item.id);
+  const ids = [...state.selected];
+  if (!ids.length) return toast('Chưa chọn row', 'error');
+  if (!confirm(`Xóa ${ids.length} kênh đã chọn?`)) return;
+  for (const id of ids) await api.deleteItem(id);
   state.selected.clear();
+  state.lastSelectedRowKey = null;
   invalidateItemCaches();
   await loadItems();
 }
@@ -1626,6 +1758,8 @@ function positionContextMenu(menu, x, y) {
 function showRowContextMenu(event, rowId) {
   const menu = qs('context-menu');
   if (!menu) return;
+  setSelectionScope('rows');
+  clearGroupSelection();
   if (!state.selected.has(rowId)) state.selected = new Set([rowId]);
   state.contextItemIds = [...state.selected];
   const contextItems = itemsByKeys(state.contextItemIds);
@@ -1674,6 +1808,7 @@ function showRowContextMenu(event, rowId) {
 function showGroupContextMenu(event, groupId) {
   const menu = qs('context-menu');
   if (!menu) return;
+  setSelectionScope('groups');
   state.contextGroup = groupId;
   state.contextItemIds = [];
   const isAll = groupId === ALL_GROUP_ID;
@@ -2169,6 +2304,12 @@ function bindEvents() {
   qs('btn-new-group').onclick = createGroup;
   qs('modal-submit').onclick = () => submitAddChannels().catch((err) => toast(err.message, 'error'));
   qs('btn-clear-list').onclick = () => clearCurrentList().catch((err) => toast(err.message, 'error'));
+  document.querySelectorAll('[data-selection-action]').forEach((el) => {
+    el.addEventListener('click', (e) => {
+      e.preventDefault();
+      handleSelectionAction(el.dataset.selectionAction).catch((err) => toast(err.message, 'error'));
+    });
+  });
   qs('settings-save-api').onclick = () => saveApiKeys().catch((err) => qs('settings-api-status').textContent = err.message);
   qs('settings-check-api').onclick = () => checkApiKeys().catch((err) => qs('settings-api-status').textContent = err.message);
   qs('nav-settings').onclick = (e) => {
@@ -2302,6 +2443,7 @@ function bindEvents() {
       setActiveGroup(ALL_GROUP_ID);
       state.groups = [];
       state.itemSummary = null;
+      clearAllSelections();
       renderOwnerSelectors();
       showInstantListOrPending(getBackendListParams(), { total: 0, totalLabel: '...', placeholderRows: 10 });
       Promise.all([loadGroups(), loadItems()]).catch((err) => toast(err.message, 'error'));
@@ -2326,6 +2468,12 @@ function bindEvents() {
     if (rename) return renameGroup(rename.dataset.renameGroup);
     if (del) return deleteGroup(del.dataset.deleteGroup).catch((err) => toast(err.message, 'error'));
     if (group) {
+      if ((e.shiftKey || e.ctrlKey || e.metaKey) && toggleGroupSelection(group.dataset.group, e)) {
+        renderGroups();
+        return;
+      }
+      setSelectionScope('groups');
+      clearGroupSelection();
       setActiveGroup(group.dataset.group);
       showInstantListOrPending(getBackendListParams());
       loadItemsInBackground();
@@ -2442,6 +2590,8 @@ function bindEvents() {
     const row = e.target.closest('[data-row-id]');
     if (!checkbox && !row) return;
     const id = checkbox ? checkbox.dataset.selectId : row.dataset.rowId;
+    setSelectionScope('rows');
+    clearGroupSelection();
     if (e.shiftKey && state.lastSelectedRowKey && selectRowRange(id)) {
       renderRows();
       return;
@@ -2455,6 +2605,8 @@ function bindEvents() {
     const row = e.target.closest('[data-row-id]');
     if (!row) return;
     const rowId = row.dataset.rowId;
+    setSelectionScope('rows');
+    clearGroupSelection();
     if (!state.selected.has(rowId)) state.selected = new Set([rowId]);
     state.draggingRowKeys = [...state.selected];
     e.dataTransfer.effectAllowed = 'move';
@@ -2585,7 +2737,10 @@ function bindEvents() {
   });
   document.addEventListener('click', (e) => {
     if (!e.target.closest('#context-menu')) closeContextMenu();
-    if (shouldClearSelectionFromClick(e) && clearSelection()) renderRows();
+    if (shouldClearSelectionFromClick(e) && clearAllSelections()) {
+      renderGroups();
+      renderRows({ preserveScroll: true });
+    }
     const ownerDropdown = qs('manager-filter-wrap')?.querySelector('[data-owner-filter]');
     if (ownerDropdown && !ownerDropdown.contains(e.target)) {
       ownerDropdown.querySelector('[data-owner-filter-menu]')?.setAttribute('hidden', '');
@@ -2600,7 +2755,38 @@ function bindEvents() {
     picker.querySelector('[data-user-manager-trigger]')?.setAttribute('aria-expanded', 'false');
   });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeContextMenu();
+    if (e.key === 'Escape') {
+      closeContextMenu();
+      if (!isTypingTarget(e.target) && clearAllSelections()) {
+        renderGroups();
+        renderRows({ preserveScroll: true });
+      }
+      return;
+    }
+    if (isTypingTarget(e.target) || document.querySelector('.modal-overlay.open')) return;
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a' && state.view === 'links') {
+      e.preventDefault();
+      const scope = preferredSelectionScope(e.target);
+      if (scope === 'groups') {
+        selectAllGroups();
+        renderGroups();
+      } else {
+        selectAllRows();
+        renderRows({ preserveScroll: true });
+      }
+      return;
+    }
+    if ((e.key === 'Delete' || e.key === 'Backspace') && state.view === 'links') {
+      if (state.selectionScope === 'groups' && state.selectedGroups.size) {
+        e.preventDefault();
+        deleteGroups([...state.selectedGroups]).catch((err) => toast(err.message, 'error'));
+        return;
+      }
+      if (state.selected.size) {
+        e.preventDefault();
+        deleteSelected().catch((err) => toast(err.message, 'error'));
+      }
+    }
   });
 }
 

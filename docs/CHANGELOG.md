@@ -21,6 +21,9 @@
 - Added a root local `.env` so local runs from `D:\Youtube_manager` use `backend/youtube_manager.db` instead of creating an empty root SQLite database.
 - Added backend paging/search/sort plus `/items/summary`, switched the channel table to cached virtual rendering, and made refresh/export/delete-dead bulk actions fetch the full scope only on demand.
 
+## 2026-06-12
+- Added row/group selection action toolbars with `Ctrl+A`, `Delete`/`Backspace`, `Escape`, and `Ctrl`/`Shift` group selection behavior matching the Spotify app interaction model.
+
 ## 2026-06-10
 - Optimized slow channel-list operations: row drag/drop now updates optimistically and saves using lightweight item-id scopes, while Refresh all/group uses a backend scope refresh endpoint instead of downloading full row data first.
 - Switched hero banner URLs to a JPEG `w1707` YouTube image variant and reduced hero image filtering so channel covers render sharper without loading oversized images.

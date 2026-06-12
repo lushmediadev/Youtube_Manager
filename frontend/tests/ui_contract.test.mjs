@@ -5,6 +5,7 @@ import path from "node:path";
 
 const root = "D:/Youtube_manager/frontend";
 const appJs = fs.readFileSync(path.join(root, "app.js"), "utf8");
+const indexHtml = fs.readFileSync(path.join(root, "index.html"), "utf8");
 const styleCss = fs.readFileSync(path.join(root, "style.css"), "utf8");
 
 test("frontend requests paged item data and summary data", () => {
@@ -113,4 +114,19 @@ test("search sort and owner filter avoid forced skeleton when cached data exists
   assert.match(appJs, /state\.search = e\.target\.value;[\s\S]*showInstantListOrPending\(getBackendListParams\(\), \{ keepCurrentOnMiss: true \}\);[\s\S]*loadItemsInBackground\(\);/);
   assert.match(appJs, /showInstantListOrPending\(getBackendListParams\(\), \{ total: 0, totalLabel: '\.\.\.', placeholderRows: 10 \}\);[\s\S]*Promise\.all\(\[loadGroups\(\), loadItems\(\)\]\)/);
   assert.doesNotMatch(appJs, /state\.adminFilterUserId = option\.dataset\.ownerFilterOption[\s\S]{0,400}invalidateItemCaches\(\)/);
+});
+
+test("row and group selection expose toolbar actions and keyboard shortcuts", () => {
+  assert.match(indexHtml, /id="btn-select-all-rows"/);
+  assert.match(indexHtml, /id="btn-delete-selection"/);
+  assert.match(indexHtml, /id="btn-select-all-groups"/);
+  assert.match(indexHtml, /id="btn-delete-groups"/);
+  assert.match(appJs, /selectedGroups:\s*new Set\(\)/);
+  assert.match(appJs, /selectionScope:\s*'rows'/);
+  assert.match(appJs, /function selectAllRows/);
+  assert.match(appJs, /function selectAllGroups/);
+  assert.match(appJs, /\(e\.ctrlKey \|\| e\.metaKey\) && e\.key\.toLowerCase\(\) === 'a'/);
+  assert.match(appJs, /e\.key === 'Delete' \|\| e\.key === 'Backspace'/);
+  assert.match(styleCss, /\.selection-toolbar/);
+  assert.match(styleCss, /\.group-row\.is-selected/);
 });
