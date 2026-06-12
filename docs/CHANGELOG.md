@@ -1,6 +1,7 @@
 # Changelog
 
 ## 2026-06-12
+- Closed the Add Channel modal before the backend crawl request so `Add & Check` responds immediately while the add job continues in the background.
 - Made add/delete channel operations update the visible list optimistically, so rows appear or disappear immediately while backend sync continues in the background.
 - Added first-page preload and background page warming for sibling/current channel-list scopes so switching groups has cached data ready without blocking the first render.
 - Added metric snapshots for YouTube channel refreshes and changed `Biến động / Ngày` to compare against a stored baseline with a minimum one-day denominator instead of showing `/ 00`.

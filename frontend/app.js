@@ -1624,6 +1624,7 @@ async function submitAddChannels() {
   }
   const group = qs('modal-group-select').value || null;
   const owner = currentOwnerForCreate();
+  closeAddModal();
   const response = await api.crawlBatch(urls, group, owner);
   const accepted = Array.isArray(response.accepted_indices) ? response.accepted_indices : urls.map((_, index) => index);
   const optimisticItems = accepted
@@ -1635,7 +1636,6 @@ async function submitAddChannels() {
     .filter(Boolean);
   applyOptimisticAddItems(optimisticItems);
   trackRefreshJobs(response);
-  closeAddModal();
   toast(`Đã thêm ${response.count} kênh vào hàng check`, 'success');
   invalidateItemCaches();
   loadItemsInBackground({ preserveScroll: true });
