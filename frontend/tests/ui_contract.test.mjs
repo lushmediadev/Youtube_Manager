@@ -116,23 +116,24 @@ test("search sort and owner filter avoid forced skeleton when cached data exists
   assert.doesNotMatch(appJs, /state\.adminFilterUserId = option\.dataset\.ownerFilterOption[\s\S]{0,400}invalidateItemCaches\(\)/);
 });
 
-test("row and group selection expose toolbar actions and keyboard shortcuts", () => {
+test("row selection exposes toolbar actions and keyboard shortcuts", () => {
   assert.doesNotMatch(indexHtml, /id="btn-select-all-rows"/);
   assert.doesNotMatch(indexHtml, /id="btn-select-all-groups"/);
   assert.match(indexHtml, /id="row-selection-toolbar"/);
-  assert.match(indexHtml, /id="group-selection-toolbar"/);
+  assert.doesNotMatch(indexHtml, /id="group-selection-toolbar"/);
   assert.match(indexHtml, /id="btn-delete-selection"/);
-  assert.match(indexHtml, /id="btn-delete-groups"/);
-  assert.match(appJs, /selectedGroups:\s*new Set\(\)/);
-  assert.match(appJs, /selectionScope:\s*'rows'/);
+  assert.doesNotMatch(indexHtml, /id="btn-delete-groups"/);
+  assert.doesNotMatch(appJs, /selectedGroups:\s*new Set\(\)/);
+  assert.doesNotMatch(appJs, /selectionScope:\s*'rows'/);
   assert.match(appJs, /function selectAllRows/);
-  assert.match(appJs, /function selectAllGroups/);
-  assert.match(appJs, /state\.lastSelectedGroupId = group\.dataset\.group === ALL_GROUP_ID \? null : group\.dataset\.group;/);
+  assert.doesNotMatch(appJs, /function selectAllGroups/);
+  assert.doesNotMatch(appJs, /function toggleGroupSelection/);
+  assert.match(appJs, /target\.closest\('#group-panel'\)[\s\S]*return !target\.closest\('\[data-group\]/);
   assert.match(appJs, /\(e\.ctrlKey \|\| e\.metaKey\) && e\.key\.toLowerCase\(\) === 'a'/);
   assert.match(appJs, /e\.key === 'Delete' \|\| e\.key === 'Backspace'/);
   assert.match(styleCss, /\.selection-toolbar/);
   assert.match(styleCss, /\.selection-toolbar\.hidden/);
-  assert.match(styleCss, /\.group-row\.is-selected/);
+  assert.doesNotMatch(styleCss, /\.group-row\.is-selected/);
 });
 
 test("add and delete mutations update visible rows optimistically", () => {

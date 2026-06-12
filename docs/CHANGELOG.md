@@ -1,6 +1,8 @@
 # Changelog
 
 ## 2026-06-12
+- Batched direct YouTube channel ID crawls into `channels.list` requests of up to 50 IDs, reused a shared `httpx.AsyncClient`, and surfaced crawl progress as `x/y completed`.
+- Removed group multi-select behavior and made blank clicks in the Groups panel clear selected channel rows.
 - Removed visible select-all toolbar buttons and fixed group range selection anchoring for Ctrl/Shift multi-select.
 - Reduced perceived UI delays by moving group edits, row moves, refresh feedback, and startup data loads away from blocking foreground awaits.
 - Closed the Add Channel modal before the backend crawl request so `Add & Check` responds immediately while the add job continues in the background.

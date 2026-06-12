@@ -1,7 +1,5 @@
 """Crawl endpoints - trigger YouTube channel refresh jobs."""
 
-import asyncio
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,7 +10,7 @@ from app.models.item import Item
 from app.models.user import User
 from app.schemas.crawl import CrawlBatchRequest, CrawlBatchResponse, CrawlRequest, CrawlResponse, CrawlScopeRequest
 from app.services.auth import get_current_user
-from app.services.crawler import crawl_item_task
+from app.services.crawler import schedule_crawl_jobs
 from app.utils.youtube_urls import build_channel_url, parse_youtube_channel_url
 
 router = APIRouter()
@@ -188,7 +186,7 @@ async def crawl(req: CrawlRequest, db: AsyncSession = Depends(get_db), current_u
     await db.flush()
     job_id = job.id
     await db.commit()
-    asyncio.create_task(crawl_item_task(job_id, parsed))
+    schedule_crawl_jobs([(job_id, parsed)])
     return CrawlResponse(job_id=job_id, status="pending")
 
 
@@ -254,8 +252,7 @@ async def crawl_batch(req: CrawlBatchRequest, db: AsyncSession = Depends(get_db)
         background.append((job.id, parsed))
 
     await db.commit()
-    for job_id, parsed in background:
-        asyncio.create_task(crawl_item_task(job_id, parsed))
+    schedule_crawl_jobs(background)
 
     return CrawlBatchResponse(
         job_ids=job_ids,
@@ -283,8 +280,7 @@ async def crawl_scope(
 
     job_ids, refreshed_item_ids, background = await _create_refresh_jobs(db, items, current_user)
     await db.commit()
-    for job_id, parsed in background:
-        asyncio.create_task(crawl_item_task(job_id, parsed))
+    schedule_crawl_jobs(background)
 
     return CrawlBatchResponse(
         job_ids=job_ids,

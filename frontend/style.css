@@ -330,25 +330,6 @@ h3 {
   border-radius: 8px;
 }
 
-.group-row.is-selected .group-row-main,
-.group-row.is-selected .group-row-main:hover,
-.group-row.is-selected .group-row-main:focus-visible {
-  background: #f2f2f2 !important;
-  color: #0f0f0f !important;
-}
-
-.group-row.is-selected::before {
-  content: "";
-  position: absolute;
-  left: 2px;
-  top: 8px;
-  bottom: 8px;
-  width: 3px;
-  border-radius: 9999px;
-  background: #cc0000;
-  pointer-events: none;
-}
-
 .group-row-main {
   min-width: 0;
 }
@@ -843,12 +824,6 @@ h3 {
 
 .selection-toolbar .hidden {
   display: none !important;
-}
-
-.group-selection-toolbar {
-  width: 100%;
-  justify-content: space-between;
-  min-height: 30px;
 }
 
 .row-selection-toolbar {

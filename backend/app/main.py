@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from app.api.router import router as api_router
 from app.config import settings
 from app.database import init_db
+from app.services.youtube_client import close_youtube_http_client
 
 logging.basicConfig(
     level=logging.DEBUG if settings.DEBUG else logging.INFO,
@@ -47,6 +48,7 @@ async def lifespan(app: FastAPI):
     logger.info("Starting YouTube Manager API...")
     await init_db()
     yield
+    await close_youtube_http_client()
     logger.info("Shutting down YouTube Manager API...")
 
 
