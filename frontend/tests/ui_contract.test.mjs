@@ -102,7 +102,15 @@ test("small group navigation hydrates cached rows before showing placeholders", 
   assert.match(appJs, /function saveDerivedGroupCachesFromLoadedItems/);
   assert.match(appJs, /state\.listTotal === loadedItems\.length/);
   assert.match(appJs, /function seedGroupCacheFromAllCache/);
+  assert.match(appJs, /function seedScopedCacheFromCurrentItems/);
   assert.match(appJs, /function showInstantListOrPending/);
-  assert.match(appJs, /seedGroupCacheFromAllCache\(params\);\s*if \(hydrateListCache\(params\)\) return true;/);
+  assert.match(appJs, /seedGroupCacheFromAllCache\(params\);\s*seedScopedCacheFromCurrentItems\(params\);\s*if \(hydrateListCache\(params\)\) return true;/);
   assert.match(appJs, /showInstantListOrPending\(getBackendListParams\(\)\);\s*loadItemsInBackground\(\);/);
+});
+
+test("search sort and owner filter avoid forced skeleton when cached data exists", () => {
+  assert.match(appJs, /showInstantListOrPending\(getBackendListParams\(\), \{\s*total: state\.listTotal \|\| 0,[\s\S]*keepCurrentOnMiss: true,/);
+  assert.match(appJs, /state\.search = e\.target\.value;[\s\S]*showInstantListOrPending\(getBackendListParams\(\), \{ keepCurrentOnMiss: true \}\);[\s\S]*loadItemsInBackground\(\);/);
+  assert.match(appJs, /showInstantListOrPending\(getBackendListParams\(\), \{ total: 0, totalLabel: '\.\.\.', placeholderRows: 10 \}\);[\s\S]*Promise\.all\(\[loadGroups\(\), loadItems\(\)\]\)/);
+  assert.doesNotMatch(appJs, /state\.adminFilterUserId = option\.dataset\.ownerFilterOption[\s\S]{0,400}invalidateItemCaches\(\)/);
 });

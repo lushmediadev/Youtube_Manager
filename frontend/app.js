@@ -416,10 +416,11 @@ function setSort(key) {
     state.sortDir = ['video', 'subscriber', 'view', 'delta', 'updated', 'checked'].includes(key) ? 'desc' : 'asc';
   }
   renderSortHeaders();
-  showListPending(getBackendListParams(), {
+  showInstantListOrPending(getBackendListParams(), {
     total: state.listTotal || 0,
     totalLabel: state.listTotal ? state.listTotal : '...',
     preserveScroll: true,
+    keepCurrentOnMiss: true,
   });
   loadItemsInBackground({ preserveScroll: true });
 }
@@ -723,6 +724,10 @@ function matchesActiveGroup(item) {
 
 function matchesSearch(item) {
   const q = state.search.trim().toLowerCase();
+  return matchesSearchQuery(item, q);
+}
+
+function matchesSearchQuery(item, q) {
   if (!q) return true;
   return [item.name, item.youtube_id, item.query, item.youtube_url, item.user_name, item.group]
     .some((v) => String(v || '').toLowerCase().includes(q));
@@ -897,6 +902,38 @@ function saveDerivedGroupCachesFromLoadedItems(params = getBackendListParams()) 
   }
 }
 
+function seedScopedCacheFromCurrentItems(params = getBackendListParams()) {
+  if ((state.currentListParams.user_id || '') !== (params.user_id || '')) return false;
+  if (state.currentListParams.search && state.currentListParams.search !== params.search) return false;
+  const loadedItems = getLoadedVirtualItems();
+  if (!loadedItems.length || state.listTotal !== loadedItems.length || loadedItems.length > CONFIG.LIST_PAGE_SIZE) return false;
+
+  const sourceGroup = state.currentListParams.group || '';
+  const targetGroup = params.group || '';
+  if (sourceGroup && sourceGroup !== targetGroup) return false;
+
+  let items = loadedItems;
+  if (targetGroup) items = items.filter((item) => item.group === targetGroup);
+  if (params.search) items = items.filter((item) => matchesSearchQuery(item, String(params.search).toLowerCase()));
+  items = sortItems(items);
+
+  const allItems = sourceGroup ? loadedItems : getLoadedVirtualItems();
+  const summaryGroups = groupSummaryForItems(allItems);
+  saveListSnapshotCache(params, {
+    itemSummary: {
+      total: items.length,
+      all_total: sourceGroup ? items.length : allItems.length,
+      active: items.filter((item) => item.status === 'active').length,
+      errors: items.filter((item) => item.status === 'error').length,
+      crawling: items.filter((item) => item.status === 'crawling').length,
+      groups: summaryGroups,
+    },
+    total: items.length,
+    items,
+  });
+  return true;
+}
+
 function seedGroupCacheFromAllCache(params = getBackendListParams()) {
   if (!params.group || params.search || params.sort || params.sort_direction) return false;
   const allParams = { ...params };
@@ -943,7 +980,9 @@ function hydrateListCache(params = getBackendListParams()) {
 
 function showInstantListOrPending(params = getBackendListParams(), options = {}) {
   seedGroupCacheFromAllCache(params);
+  seedScopedCacheFromCurrentItems(params);
   if (hydrateListCache(params)) return true;
+  if (options.keepCurrentOnMiss) return false;
   showListPending(params, options);
   return false;
 }
@@ -2239,12 +2278,8 @@ function bindEvents() {
   qs('search-input').oninput = (e) => {
     state.search = e.target.value;
     clearTimeout(state.searchTimer);
+    showInstantListOrPending(getBackendListParams(), { keepCurrentOnMiss: true });
     state.searchTimer = setTimeout(() => {
-      const searchTotal = state.listTotal ? Math.min(state.listTotal, CONFIG.LIST_PAGE_SIZE) : 0;
-      showListPending(getBackendListParams(), {
-        total: searchTotal,
-        totalLabel: searchTotal || '...',
-      });
       loadItemsInBackground();
     }, 220);
   };
@@ -2267,11 +2302,8 @@ function bindEvents() {
       setActiveGroup(ALL_GROUP_ID);
       state.groups = [];
       state.itemSummary = null;
-      invalidateItemCaches();
       renderOwnerSelectors();
-      if (!hydrateListCache(getBackendListParams())) {
-        showListPending(getBackendListParams(), { total: 0, totalLabel: '...', placeholderRows: 10 });
-      }
+      showInstantListOrPending(getBackendListParams(), { total: 0, totalLabel: '...', placeholderRows: 10 });
       Promise.all([loadGroups(), loadItems()]).catch((err) => toast(err.message, 'error'));
     }
   });

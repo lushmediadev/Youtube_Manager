@@ -5,6 +5,7 @@
 - Added metric snapshots for YouTube channel refreshes and changed `Biến động / Ngày` to compare against a stored baseline with a minimum one-day denominator instead of showing `/ 00`.
 - Changed `Biến động / Ngày` back to desktop-style previous-refresh comparison while keeping metric snapshots as raw refresh history.
 - Added instant small-group navigation by deriving per-group first-page caches from fully loaded All Channels data before falling back to skeleton placeholders.
+- Reduced perceived loading delays by rendering cached/current rows for search, sort, and owner-filter navigation before falling back to skeleton placeholders.
 
 ## 2026-06-11
 - Added a warm-start list cache so returning users see cached groups/first-page channels immediately while production API data refreshes in the background.
