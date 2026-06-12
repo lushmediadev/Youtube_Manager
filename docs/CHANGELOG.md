@@ -3,6 +3,7 @@
 ## 2026-06-12
 - Added first-page preload and background page warming for sibling/current channel-list scopes so switching groups has cached data ready without blocking the first render.
 - Added metric snapshots for YouTube channel refreshes and changed `Biến động / Ngày` to compare against a stored baseline with a minimum one-day denominator instead of showing `/ 00`.
+- Changed `Biến động / Ngày` back to desktop-style previous-refresh comparison while keeping metric snapshots as raw refresh history.
 
 ## 2026-06-11
 - Added a warm-start list cache so returning users see cached groups/first-page channels immediately while production API data refreshes in the background.

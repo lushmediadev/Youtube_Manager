@@ -24,39 +24,6 @@ def _delta_days(previous: datetime | None, current: datetime) -> int | None:
     return max(1, (current.date() - previous.date()).days)
 
 
-async def _load_delta_baseline(db, item: Item, checked_at: datetime) -> tuple[int | None, datetime | None]:
-    start_of_day = datetime.combine(checked_at.date(), datetime.min.time())
-    previous_day_result = await db.execute(
-        select(MetricSnapshot)
-        .where(
-            MetricSnapshot.item_id == item.id,
-            MetricSnapshot.view_count.is_not(None),
-            MetricSnapshot.checked_at < start_of_day,
-        )
-        .order_by(MetricSnapshot.checked_at.desc())
-        .limit(1)
-    )
-    previous_day_snapshot = previous_day_result.scalar_one_or_none()
-    if previous_day_snapshot is not None:
-        return previous_day_snapshot.view_count, previous_day_snapshot.checked_at
-
-    previous_result = await db.execute(
-        select(MetricSnapshot)
-        .where(
-            MetricSnapshot.item_id == item.id,
-            MetricSnapshot.view_count.is_not(None),
-            MetricSnapshot.checked_at < checked_at,
-        )
-        .order_by(MetricSnapshot.checked_at.desc())
-        .limit(1)
-    )
-    previous_snapshot = previous_result.scalar_one_or_none()
-    if previous_snapshot is not None:
-        return previous_snapshot.view_count, previous_snapshot.checked_at
-
-    return item.view_count, item.last_checked
-
-
 async def crawl_item_task(job_id: str, parsed: ParsedYouTubeChannel):
     async with CRAWL_TASK_SEMAPHORE:
         async with async_session() as db:
@@ -100,7 +67,8 @@ async def crawl_item_task(job_id: str, parsed: ParsedYouTubeChannel):
                     raise YouTubeApiError(str(last_error) if last_error else "Không gọi được YouTube API")
 
                 checked_at = data["checked_at"]
-                baseline_view_count, baseline_checked = await _load_delta_baseline(db, item, checked_at)
+                previous_view_count = item.view_count
+                previous_checked = item.last_checked
 
                 item.youtube_id = data["youtube_id"] or item.youtube_id
                 item.name = data["name"] or item.name
@@ -114,9 +82,9 @@ async def crawl_item_task(job_id: str, parsed: ParsedYouTubeChannel):
                 item.error_code = None
                 item.error_message = None
 
-                if baseline_view_count is not None and data["view_count"] is not None:
-                    item.view_count_delta = data["view_count"] - baseline_view_count
-                    item.delta_days = _delta_days(baseline_checked, checked_at)
+                if previous_view_count is not None and data["view_count"] is not None:
+                    item.view_count_delta = data["view_count"] - previous_view_count
+                    item.delta_days = _delta_days(previous_checked, checked_at)
                 else:
                     item.view_count_delta = None
                     item.delta_days = None
