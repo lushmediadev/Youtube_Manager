@@ -81,3 +81,19 @@ test("startup hydrates cached list before waiting for API data", () => {
   assert.match(appJs, /if \(!hydrateListCache\(getBackendListParams\(\)\)\) \{\s*showListPending/);
   assert.match(appJs, /saveListCache\(params\)/);
 });
+
+test("list scopes preload cached first pages and warm current pages in background", () => {
+  assert.match(appJs, /PRELOAD_GROUP_LIMIT:\s*12/);
+  assert.match(appJs, /BACKGROUND_WARM_DELAY_MS:\s*180/);
+  assert.match(appJs, /async function preloadFirstPageForParams/);
+  assert.match(appJs, /function scheduleCurrentScopeWarmup/);
+  assert.match(appJs, /loadVirtualPage\(offset, \{ silent: true, render: false \}\)/);
+  assert.match(appJs, /function scheduleSiblingGroupPreload/);
+  assert.match(appJs, /const groups = \[ALL_GROUP_ID, \.\.\.allGroupsFromItems\(\)\]/);
+  assert.match(appJs, /scheduleListPreloads\(\)/);
+});
+
+test("delta display never renders zero day denominators", () => {
+  assert.match(appJs, /function renderDelta/);
+  assert.match(appJs, /Math\.max\(1, Number\(item\.delta_days\) \|\| 1\)/);
+});

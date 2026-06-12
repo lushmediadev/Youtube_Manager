@@ -5,6 +5,9 @@
   BULK_PAGE_SIZE: 1000,
   VIRTUAL_ROW_HEIGHT: 86,
   VIRTUAL_OVERSCAN_ROWS: 10,
+  PRELOAD_GROUP_LIMIT: 12,
+  BACKGROUND_WARM_DELAY_MS: 180,
+  BACKGROUND_WARM_MAX_PAGES: 40,
 };
 
 const ALL_GROUP_ID = 'all';
@@ -54,6 +57,10 @@ const state = {
   pendingJobs: new Set(),
   pendingJobToItem: new Map(),
   pollTimer: null,
+  preloadTimer: null,
+  warmTimer: null,
+  warmScopeKey: '',
+  preloadedScopeKeys: new Set(),
 };
 
 function qs(id) { return document.getElementById(id); }
@@ -75,6 +82,9 @@ function readJsonStorage(key) {
 }
 function writeJsonStorage(key, value) {
   try { localStorage.setItem(key, JSON.stringify(value)); } catch (err) { console.warn('cache write failed', err); }
+}
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 function clearListCache() {
   Object.keys(localStorage)
@@ -748,7 +758,7 @@ function renderDelta(item) {
   const cls = delta > 0 ? 'metric-delta-up' : delta < 0 ? 'metric-delta-down' : 'metric-delta-flat';
   const sign = delta > 0 ? '+' : '';
   const icon = delta > 0 ? 'arrow_upward' : delta < 0 ? 'arrow_downward' : 'remove';
-  const days = item.delta_days == null ? '--' : String(item.delta_days).padStart(2, '0');
+  const days = item.delta_days == null ? '--' : String(Math.max(1, Number(item.delta_days) || 1)).padStart(2, '0');
   return `<div class="metric-delta ${cls} justify-end"><span class="material-symbols-outlined metric-delta-icon">${icon}</span><span>${sign}${formatNumber(delta)} / ${days}</span></div>`;
 }
 
@@ -823,6 +833,20 @@ function saveListCache(params = getBackendListParams()) {
   writeJsonStorage(listCacheKey(params), snapshot);
 }
 
+function saveListSnapshotCache(params, snapshot = {}) {
+  const items = Array.isArray(snapshot.items) ? snapshot.items : [];
+  const total = Number(snapshot.total ?? snapshot.itemSummary?.total ?? items.length) || items.length;
+  if (!total && !items.length && !state.groups.length) return;
+  writeJsonStorage(listCacheKey(params), {
+    cached_at: Date.now(),
+    params,
+    groups: Array.isArray(snapshot.groups) ? snapshot.groups : state.groups,
+    itemSummary: snapshot.itemSummary || null,
+    total,
+    items: items.slice(0, CONFIG.LIST_PAGE_SIZE),
+  });
+}
+
 function hydrateListCache(params = getBackendListParams()) {
   const cached = readJsonStorage(listCacheKey(params));
   if (!cached || Date.now() - Number(cached.cached_at || 0) > LIST_CACHE_TTL_MS) return false;
@@ -844,7 +868,7 @@ function pageOffsetForIndex(index) {
   return Math.max(0, Math.floor(index / CONFIG.LIST_PAGE_SIZE) * CONFIG.LIST_PAGE_SIZE);
 }
 
-async function loadVirtualPage(offset) {
+async function loadVirtualPage(offset, options = {}) {
   const pageOffset = pageOffsetForIndex(offset);
   if (state.loadedPageOffsets.has(pageOffset)) return;
   if (state.loadingPagePromises.has(pageOffset)) return state.loadingPagePromises.get(pageOffset);
@@ -853,10 +877,15 @@ async function loadVirtualPage(offset) {
     .then((data) => {
       if (scopeKey !== state.listScopeKey) return;
       commitPageItems(Array.isArray(data.items) ? data.items : [], pageOffset, data.total ?? state.listTotal);
-      renderGroups();
-      renderRows({ preserveScroll: true });
+      saveListCache(state.currentListParams);
+      if (options.render !== false) {
+        renderGroups();
+        renderRows({ preserveScroll: true });
+      }
     })
-    .catch((err) => toast(err.message || 'Không tải được dữ liệu', 'error'))
+    .catch((err) => {
+      if (!options.silent) toast(err.message || 'Không tải được dữ liệu', 'error');
+    })
     .finally(() => state.loadingPagePromises.delete(pageOffset));
   state.loadingPagePromises.set(pageOffset, promise);
   return promise;
@@ -871,6 +900,83 @@ function queueVirtualPagesForRange(start, end) {
     const missing = state.virtualItems.slice(offset, pageEnd).some((item) => !item);
     if (missing) loadVirtualPage(offset);
   }
+}
+
+function stopBackgroundWarmup() {
+  if (state.warmTimer) clearTimeout(state.warmTimer);
+  state.warmTimer = null;
+  state.warmScopeKey = '';
+}
+
+function scheduleCurrentScopeWarmup() {
+  stopBackgroundWarmup();
+  if (!state.listTotal || state.listTotal <= CONFIG.LIST_PAGE_SIZE) return;
+  const scopeKey = state.listScopeKey;
+  state.warmScopeKey = scopeKey;
+  const offsets = [];
+  const maxPages = Math.max(1, CONFIG.BACKGROUND_WARM_MAX_PAGES);
+  for (let offset = CONFIG.LIST_PAGE_SIZE; offset < state.listTotal && offsets.length < maxPages; offset += CONFIG.LIST_PAGE_SIZE) {
+    if (!state.loadedPageOffsets.has(offset)) offsets.push(offset);
+  }
+  if (!offsets.length) return;
+  let index = 0;
+  const warmNext = async () => {
+    if (scopeKey !== state.listScopeKey || state.warmScopeKey !== scopeKey) return;
+    const offset = offsets[index];
+    index += 1;
+    if (offset == null) return;
+    await loadVirtualPage(offset, { silent: true, render: false });
+    if (scopeKey !== state.listScopeKey || state.warmScopeKey !== scopeKey) return;
+    if (index < offsets.length) {
+      state.warmTimer = setTimeout(warmNext, CONFIG.BACKGROUND_WARM_DELAY_MS);
+    }
+  };
+  state.warmTimer = setTimeout(warmNext, CONFIG.BACKGROUND_WARM_DELAY_MS);
+}
+
+async function preloadFirstPageForParams(params) {
+  const scopeKey = getBackendListScopeKey(params);
+  if (state.preloadedScopeKeys.has(scopeKey)) return;
+  if (readJsonStorage(listCacheKey(params))) {
+    state.preloadedScopeKeys.add(scopeKey);
+    return;
+  }
+  state.preloadedScopeKeys.add(scopeKey);
+  const [summary, data] = await Promise.all([
+    api.itemsSummary(params),
+    api.items({ ...params, limit: CONFIG.LIST_PAGE_SIZE, offset: 0 }),
+  ]);
+  saveListSnapshotCache(params, {
+    itemSummary: summary || null,
+    total: Number(summary?.total ?? data?.total ?? (data?.items || []).length) || 0,
+    items: Array.isArray(data?.items) ? data.items : [],
+  });
+}
+
+function scheduleSiblingGroupPreload() {
+  if (state.preloadTimer) clearTimeout(state.preloadTimer);
+  if (state.search.trim() || state.sortKey !== 'stt' || state.sortDir !== 'asc') return;
+  const groups = [ALL_GROUP_ID, ...allGroupsFromItems()]
+    .filter((group) => group !== state.activeGroup)
+    .slice(0, CONFIG.PRELOAD_GROUP_LIMIT);
+  if (!groups.length) return;
+  state.preloadTimer = setTimeout(async () => {
+    for (const group of groups) {
+      const params = paramsForGroup(group);
+      if (getBackendListScopeKey(params) === state.listScopeKey) continue;
+      try {
+        await preloadFirstPageForParams(params);
+        await delay(CONFIG.BACKGROUND_WARM_DELAY_MS);
+      } catch (err) {
+        console.warn('group preload failed', group, err);
+      }
+    }
+  }, CONFIG.BACKGROUND_WARM_DELAY_MS * 2);
+}
+
+function scheduleListPreloads() {
+  scheduleCurrentScopeWarmup();
+  scheduleSiblingGroupPreload();
 }
 
 function getVirtualRange() {
@@ -991,6 +1097,7 @@ function estimatedListTotal(params = getBackendListParams()) {
 }
 
 function showListPending(params = getBackendListParams(), options = {}) {
+  stopBackgroundWarmup();
   const hasExplicitTotal = Object.prototype.hasOwnProperty.call(options, 'total');
   const total = Math.max(0, Number(options.total ?? estimatedListTotal(params)) || 0);
   state.listPending = true;
@@ -1062,6 +1169,7 @@ async function loadItems(options = {}) {
   renderModalGroups();
   renderRows({ preserveScroll: options.preserveScroll });
   saveListCache(params);
+  scheduleListPreloads();
 }
 
 async function refreshItems(items) {
