@@ -1071,6 +1071,58 @@ function applyOptimisticRemoveItemsByIds(ids = []) {
   return removed;
 }
 
+function adjustGroupSummaryCount(groupName, delta) {
+  if (!groupName || !delta) return;
+  const summary = ensureItemSummary();
+  let entry = summary.groups.find((group) => group.name === groupName);
+  if (!entry && delta > 0) {
+    entry = { name: groupName, count: 0 };
+    summary.groups.push(entry);
+  }
+  if (entry) entry.count = clampCount(entry.count + delta);
+  summary.groups = summary.groups
+    .filter((group) => group.count > 0)
+    .sort((a, b) => a.name.localeCompare(b.name, 'vi', { sensitivity: 'base', numeric: true }));
+}
+
+function applyOptimisticMoveItems(items = [], nextGroup = null) {
+  const keys = new Set(items.map(itemKey));
+  if (!keys.size) return [];
+  const visibilityChanges = items.map((item) => {
+    const nextItem = { ...item, group: nextGroup };
+    return {
+      item,
+      before: matchesActiveGroup(item) && matchesSearch(item),
+      after: matchesActiveGroup(nextItem) && matchesSearch(nextItem),
+    };
+  });
+  const beforeVisible = visibilityChanges.filter((entry) => entry.before).length;
+  const afterVisible = visibilityChanges.filter((entry) => entry.after).length;
+  items.forEach((item) => {
+    adjustGroupSummaryCount(item.group, -1);
+    adjustGroupSummaryCount(nextGroup, 1);
+  });
+  const summary = ensureItemSummary();
+  visibilityChanges.forEach(({ item, before, after }) => {
+    const bucket = itemStatusBucket(item);
+    if (!bucket) return;
+    summary[bucket] = clampCount(summary[bucket] + (after ? 1 : 0) - (before ? 1 : 0));
+  });
+  state.virtualItems = state.virtualItems
+    .map((item) => (item && keys.has(itemKey(item)) ? { ...item, group: nextGroup } : item))
+    .filter((item) => item && matchesActiveGroup(item) && matchesSearch(item));
+  summary.total = clampCount(summary.total + afterVisible - beforeVisible);
+  state.listTotal = clampCount(state.listTotal + afterVisible - beforeVisible);
+  state.items = getLoadedVirtualItems();
+  state.selected = new Set([...state.selected].filter((id) => state.virtualItems.some((item) => itemKey(item) === id)));
+  state.lastSelectedRowKey = null;
+  renderGroups();
+  renderModalGroups();
+  renderRows({ preserveScroll: true, skipQueue: true });
+  saveListCache();
+  return items;
+}
+
 function buildListCacheSnapshot(params = getBackendListParams()) {
   return {
     cached_at: Date.now(),
@@ -1553,6 +1605,8 @@ async function refreshItems(items) {
   if (!items.length) return;
   const urls = items.map(itemUrl).filter(Boolean);
   const itemIds = items.map((item) => item.id);
+  markItemsCrawling(itemIds);
+  toast(`Đang gửi refresh ${itemIds.length} kênh`, 'info');
   const response = await api.crawlBatch(urls, null, targetUserId() || null, itemIds);
   trackRefreshJobs({ ...response, item_ids: response.item_ids?.length ? response.item_ids : itemIds });
   toast(`Đã bắt đầu refresh ${response.count} kênh`, 'success');
@@ -1684,13 +1738,30 @@ async function commitInlineGroupEdit() {
   }
   if (edit.mode === 'create') {
     state.groups.push(next);
-    await saveGroups();
-    invalidateItemCaches();
     state.inlineGroupEdit = null;
     setActiveGroup(next);
+    state.itemSummary = {
+      ...ensureItemSummary(),
+      total: 0,
+      active: 0,
+      errors: 0,
+      crawling: 0,
+    };
     renderGroups();
     renderModalGroups();
-    await loadItems();
+    clearListPending();
+    resetVirtualList(0, getBackendListParams(), { preserveLoaded: false });
+    renderRows({ preserveScroll: true, skipQueue: true });
+    invalidateItemCaches();
+    Promise.resolve()
+      .then(async () => {
+        await saveGroups();
+        await loadItems({ preserveScroll: true });
+      })
+      .catch((err) => {
+        toast(err.message || 'Lưu group lỗi', 'error');
+        loadGroups().catch((loadErr) => toast(loadErr.message, 'error'));
+      });
     return;
   }
   if (edit.originalName === next) {
@@ -1698,14 +1769,31 @@ async function commitInlineGroupEdit() {
     renderGroups();
     return;
   }
-  await api.renameGroup(edit.originalName, next, targetUserId() || null);
+  const originalName = edit.originalName;
   state.groups = state.groups.filter((g) => g !== edit.originalName);
   state.groups.push(next);
-  await saveGroups();
-  invalidateItemCaches();
   if (state.activeGroup === edit.originalName) setActiveGroup(next);
+  state.virtualItems = state.virtualItems.map((item) => (
+    item?.group === originalName ? { ...item, group: next } : item
+  ));
+  const summaryGroup = state.itemSummary?.groups?.find((group) => group.name === originalName);
+  if (summaryGroup) summaryGroup.name = next;
+  state.items = getLoadedVirtualItems();
   state.inlineGroupEdit = null;
-  await loadItems();
+  renderGroups();
+  renderModalGroups();
+  renderRows({ preserveScroll: true, skipQueue: true });
+  invalidateItemCaches();
+  Promise.resolve()
+    .then(async () => {
+      await api.renameGroup(originalName, next, targetUserId() || null);
+      await saveGroups();
+      loadItemsInBackground({ preserveScroll: true });
+    })
+    .catch((err) => {
+      toast(err.message || 'Đổi tên group lỗi', 'error');
+      Promise.all([loadGroups(), loadItems({ preserveScroll: true })]).catch((loadErr) => toast(loadErr.message, 'error'));
+    });
 }
 async function deleteGroup(name) {
   await deleteGroups([name]);
@@ -1715,29 +1803,51 @@ async function deleteGroups(names = []) {
   if (!targets.length) return toast('Chưa chọn group', 'info');
   const label = targets.length === 1 ? `group "${targets[0]}"` : `${targets.length} groups`;
   if (!confirm(`Xóa ${label}? Channel sẽ được đưa về No group.`)) return;
-  for (const name of targets) {
-    await api.renameGroup(name, '', targetUserId() || null);
-  }
   state.groups = state.groups.filter((g) => !targets.includes(g));
-  await saveGroups();
   targets.forEach((name) => state.selectedGroups.delete(name));
   state.lastSelectedGroupId = null;
+  if (targets.includes(state.activeGroup)) setActiveGroup(ALL_GROUP_ID);
+  renderGroups();
+  renderModalGroups();
   invalidateItemCaches();
-  if (targets.includes(state.activeGroup)) state.activeGroup = ALL_GROUP_ID;
-  await loadItems();
+  showInstantListOrPending(getBackendListParams(), { keepCurrentOnMiss: true });
+  Promise.resolve()
+    .then(async () => {
+      for (const name of targets) {
+        await api.renameGroup(name, '', targetUserId() || null);
+      }
+      await saveGroups();
+      loadItemsInBackground({ preserveScroll: true });
+    })
+    .catch((err) => {
+      toast(err.message || 'Xoá group lỗi', 'error');
+      Promise.all([loadGroups(), loadItems({ preserveScroll: true })]).catch((loadErr) => toast(loadErr.message, 'error'));
+    });
 }
 async function moveSelectedToGroup() {
   const items = selectedItems();
   if (!items.length) return toast('Chưa chọn row', 'error');
   const group = prompt('Chuyển tới group (để trống để bỏ group)', state.activeGroup !== ALL_GROUP_ID ? state.activeGroup : '');
   if (group == null) return;
-  await api.moveItems(items.map((i) => i.id), group.trim() || null, targetUserId() || null);
-  if (group.trim() && !state.groups.includes(group.trim())) {
-    state.groups.push(group.trim());
-    await saveGroups();
+  const nextGroup = group.trim() || null;
+  applyOptimisticMoveItems(items, nextGroup);
+  if (nextGroup && !state.groups.includes(nextGroup)) {
+    state.groups.push(nextGroup);
+    renderGroups();
+    renderModalGroups();
   }
   invalidateItemCaches();
-  await loadItems();
+  toast(`Đã chuyển ${items.length} kênh`, 'success');
+  Promise.resolve()
+    .then(async () => {
+      await api.moveItems(items.map((i) => i.id), nextGroup, targetUserId() || null);
+      if (nextGroup) await saveGroups();
+      loadItemsInBackground({ preserveScroll: true });
+    })
+    .catch((err) => {
+      toast(err.message || 'Chuyển group lỗi', 'error');
+      loadItemsInBackground({ preserveScroll: true });
+    });
 }
 async function deleteSelected() {
   const ids = [...state.selected];
@@ -1867,6 +1977,7 @@ function trackRefreshJobs(response) {
 }
 
 async function refreshScope(params = getBackendListParams(), label = 'channels') {
+  toast(`Đang gửi refresh ${label}`, 'info');
   const response = await api.crawlScope(params);
   trackRefreshJobs(response);
   toast(`Đã bắt đầu refresh ${response.count} ${label}`, 'success');
@@ -2192,31 +2303,60 @@ async function reorderGroups(dragged, target, placement) {
   state.groups = groups;
   renderGroups();
   renderModalGroups();
-  await saveGroups();
+  saveGroups().catch((err) => {
+    toast(err.message || 'Lưu thứ tự group lỗi', 'error');
+    loadGroups().catch((loadErr) => toast(loadErr.message, 'error'));
+  });
 }
 
 async function moveRowsToGroupByKeys(keys, group) {
   const items = itemsByKeys(keys);
   if (!items.length) return;
   const nextGroup = group || null;
-  await api.moveItems(items.map((item) => item.id), nextGroup, targetUserId() || null);
+  applyOptimisticMoveItems(items, nextGroup);
   if (nextGroup && !state.groups.includes(nextGroup)) {
     state.groups.push(nextGroup);
-    await saveGroups();
+    renderGroups();
+    renderModalGroups();
   }
   invalidateItemCaches();
   toast(`Đã chuyển ${items.length} kênh`, 'success');
-  await loadItems();
+  Promise.resolve()
+    .then(async () => {
+      await api.moveItems(items.map((item) => item.id), nextGroup, targetUserId() || null);
+      if (nextGroup) await saveGroups();
+      loadItemsInBackground({ preserveScroll: true });
+    })
+    .catch((err) => {
+      toast(err.message || 'Chuyển group lỗi', 'error');
+      loadItemsInBackground({ preserveScroll: true });
+    });
 }
 
 async function clearGroup(groupId) {
   const group = groupId === ALL_GROUP_ID ? null : groupId;
   const label = group ? `group "${group}"` : 'toàn bộ list';
   if (!confirm(`Xóa ${label}?`)) return;
-  await api.clearItems(group, targetUserId() || null);
+  const activeScope = groupId === state.activeGroup || (!group && state.activeGroup === ALL_GROUP_ID);
+  if (activeScope) {
+    applyOptimisticRemoveItemsByIds(getLoadedVirtualItems().map(itemKey));
+  } else if (group) {
+    const summaryGroup = state.itemSummary?.groups?.find((entry) => entry.name === group);
+    if (summaryGroup) summaryGroup.count = 0;
+    renderGroups();
+  }
   state.selected.clear();
   invalidateItemCaches();
-  await loadItems();
+  toast(`Đã xoá ${label}`, 'success');
+  Promise.resolve()
+    .then(async () => {
+      await api.clearItems(group, targetUserId() || null);
+      loadItemsInBackground({ preserveScroll: true });
+    })
+    .catch((err) => {
+      toast(err.message || 'Xoá group lỗi', 'error');
+      loadItemsInBackground({ preserveScroll: true });
+    });
 }
 
 function switchView(view) {
@@ -2960,11 +3100,13 @@ async function init() {
     .then(() => { qs('api-status').textContent = 'Online'; })
     .catch(() => { qs('api-status').textContent = 'Offline'; });
   await refreshCurrentUser();
-  await loadUsers();
   renderOwnerSelectors();
-  await loadPreferences();
-  await loadGroups();
-  await loadItems();
+  await Promise.all([
+    loadUsers().then(renderOwnerSelectors),
+    loadPreferences(),
+    loadGroups(),
+    loadItems(),
+  ]);
 }
 
 init().catch((err) => {

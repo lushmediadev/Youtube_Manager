@@ -139,3 +139,11 @@ test("add and delete mutations update visible rows optimistically", () => {
   assert.match(appJs, /const removed = applyOptimisticRemoveItemsByIds\(ids\);[\s\S]*for \(const id of ids\) await api\.deleteItem\(id\);[\s\S]*loadItemsInBackground\(\{ preserveScroll: true \}\);/);
   assert.doesNotMatch(appJs, /async function submitAddChannels\(\)[\s\S]*await loadItems\(\);[\s\S]*function setActiveGroup/);
 });
+
+test("visible workspace actions avoid blocking on backend round trips", () => {
+  assert.match(appJs, /function applyOptimisticMoveItems/);
+  assert.match(appJs, /async function refreshItems[\s\S]*toast\(`Đang gửi refresh[\s\S]*const response = await api\.crawlBatch/);
+  assert.match(appJs, /async function refreshScope[\s\S]*toast\(`Đang gửi refresh[\s\S]*const response = await api\.crawlScope/);
+  assert.match(appJs, /async function moveRowsToGroupByKeys[\s\S]*applyOptimisticMoveItems\(items, nextGroup\);[\s\S]*await api\.moveItems/);
+  assert.match(appJs, /await Promise\.all\(\[[\s\S]*loadUsers\(\)\.then\(renderOwnerSelectors\),[\s\S]*loadPreferences\(\),[\s\S]*loadGroups\(\),[\s\S]*loadItems\(\),[\s\S]*\]\);/);
+});
