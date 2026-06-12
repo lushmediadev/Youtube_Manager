@@ -130,3 +130,11 @@ test("row and group selection expose toolbar actions and keyboard shortcuts", ()
   assert.match(styleCss, /\.selection-toolbar/);
   assert.match(styleCss, /\.group-row\.is-selected/);
 });
+
+test("add and delete mutations update visible rows optimistically", () => {
+  assert.match(appJs, /function applyOptimisticAddItems/);
+  assert.match(appJs, /function applyOptimisticRemoveItemsByIds/);
+  assert.match(appJs, /applyOptimisticAddItems\(optimisticItems\);[\s\S]*trackRefreshJobs\(response\);[\s\S]*loadItemsInBackground\(\{ preserveScroll: true \}\);/);
+  assert.match(appJs, /const removed = applyOptimisticRemoveItemsByIds\(ids\);[\s\S]*for \(const id of ids\) await api\.deleteItem\(id\);[\s\S]*loadItemsInBackground\(\{ preserveScroll: true \}\);/);
+  assert.doesNotMatch(appJs, /async function submitAddChannels\(\)[\s\S]*await loadItems\(\);[\s\S]*function setActiveGroup/);
+});
